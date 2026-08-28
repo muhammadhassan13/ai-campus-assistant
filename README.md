@@ -1,4 +1,4 @@
-# AI Campus Assistant
+# AI Campus Assistant - Branch A Version
 
 An intelligent, multi-turn AI campus query system built with Node.js, Express, TypeScript, and MongoDB.
 
