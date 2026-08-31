@@ -13,6 +13,12 @@ export class Repository<T extends HasId> {
     return this.items;
   }
 
+  public deleteById(id: number): boolean {
+    const initialLength = this.items.length;
+    this.items = this.items.filter((item) => item.id != id);
+    return this.items.length < initialLength;
+  }
+
   // Simulated Async API call to fetch ID
   public async fetchById(id: number): Promise<T> {
     return new Promise((resolve, reject) => {
