@@ -2,49 +2,75 @@ import { Student, Degree, StudentStatus } from './student.js';
 import { Repository } from './repository.js';
 
 const studentRepo = new Repository<Student>();
-
-const student1 = new Student(
-  260,
-  'Muhammad Hassan',
-  'hassan@example.com',
-  Degree.ArtificialIntelligence,
-  3.89,
-  StudentStatus.Active
-);
-
-const student2 = new Student(
-  286,
-  'Syed Shabih',
-  'shabih@example.com',
-  Degree.ComputerScience,
-  3.08,
-  StudentStatus.Active
-);
-
-studentRepo.add(student1);
-studentRepo.add(student2);
-
-async function runDemo() {
-  console.log('Fetching student data from simulated API...');
-  // successful search
+function createStudentSafely(
+  id: number,
+  name: string,
+  email: string,
+  degree: Degree,
+  gpa: number
+) {
   try {
-    const student = await studentRepo.fetchById(260);
-    console.log('\nSuccessfully fetched student: ', student.getDetails());
+    const student = new Student(
+      id,
+      name,
+      email,
+      degree,
+      gpa,
+      StudentStatus.Active
+    );
+    console.log('Successfully created: ', student.name);
+    studentRepo.add(student);
   } catch (error) {
     if (error instanceof Error) {
-      console.log('\nAPI Error caught: ', error.message);
-    }
-  }
-
-  // intentional unsuccessful search
-  try {
-    const student = await studentRepo.fetchById(999);
-    console.log('\nSuccessfully fetched student: ', student.getDetails());
-  } catch (error) {
-    if (error instanceof Error) {
-      console.log('\nAPI Error caught: ', error.message);
+      console.error('Validation Failed: ', error.message);
     }
   }
 }
 
-runDemo();
+console.log('--- Testing Input Validation ---');
+
+// valid case
+createStudentSafely(
+  260,
+  'Muhammad Hassan',
+  'hassan@example.com',
+  Degree.ArtificialIntelligence,
+  3.89
+);
+
+// invalid email
+createStudentSafely(
+  286,
+  'Syed Shabih',
+  'shabih-example.com',
+  Degree.ComputerScience,
+  3.08
+);
+
+// invalid GPA
+createStudentSafely(
+  789,
+  'Test Student',
+  'teststudent@outlook.com',
+  Degree.SoftwareEngineering,
+  4.56
+);
+
+// valid case
+createStudentSafely(
+  277,
+  'Madikh Younas',
+  'madikh@gmail.com',
+  Degree.ArtificialIntelligence,
+  3.42
+);
+
+console.log('\n--- All Successfully Created Students ---');
+const allStudents = studentRepo.getAll();
+if (allStudents.length === 0) {
+  console.log('No valid students found');
+} else {
+  allStudents.forEach((student) => {
+    console.log(student.getDetails());
+  });
+}

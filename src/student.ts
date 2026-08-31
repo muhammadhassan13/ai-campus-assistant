@@ -31,35 +31,45 @@ export class Student implements IStudent {
     public degree: Degree,
     public gpa: number,
     public status: StudentStatus = StudentStatus.Active
-  ) {}
+  ) {
+    //validation of name and email on creation
+    if (!name || name.trim() === '') {
+      throw new Error('Student name cannot be empty');
+    }
+    if (!email.includes('@')) {
+      throw new Error('Invalid email address format');
+    }
+    this.validateGpa(gpa);
+  }
 
   // methods
+  public updateStatus(newStatus: StudentStatus): void {
+    this.status = newStatus;
+  }
+
+  public updateGpa(newGpa: number): void {
+    this.validateGpa(newGpa);
+    this.gpa = newGpa;
+  }
+
+  public validateGpa(gpa: number): void {
+    if (gpa < 0.0 || gpa > 4.0) {
+      throw new Error('Invalid GPA! Must be between 0.0 and 4.0');
+    }
+  }
+
   public getDetails(): string {
     return (
       '[' +
       this.id +
       '] ' +
       this.name +
-      '\n' +
-      'Department: ' +
+      ' | Department: ' +
       this.degree +
-      '\n' +
-      'GPA: ' +
+      ' | GPA: ' +
       this.gpa +
-      '\n' +
-      'Status: ' +
+      ' | Status: ' +
       this.status
     );
-  }
-
-  public updateStatus(newStatus: StudentStatus): void {
-    this.status = newStatus;
-  }
-
-  public updateGpa(newGpa: number): void {
-    if (newGpa < 0.0 || newGpa > 4.0) {
-      throw new Error('GPA must be between 0.0 and 4.0');
-    }
-    this.gpa = newGpa;
   }
 }
