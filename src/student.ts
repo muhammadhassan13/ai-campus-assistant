@@ -11,6 +11,7 @@ export enum Degree {
   SoftwareEngineering = 'Software Engineering',
   DataScience = 'Data Science',
   ArtificialIntelligence = 'Artificial Intelligence',
+  Null = 'Not specified',
 }
 export interface IStudent {
   id: number;
@@ -28,7 +29,7 @@ export class Student implements IStudent {
     public id: number,
     public name: string,
     public email: string,
-    public degree: Degree,
+    public degree: Degree = Degree.Null,
     public gpa: number,
     public status: StudentStatus = StudentStatus.Active
   ) {

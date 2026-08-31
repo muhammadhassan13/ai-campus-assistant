@@ -27,7 +27,7 @@ async function showMenu() {
       await handleAddStudent();
       break;
     case '2':
-      await handleListStudents();
+      handleListStudents();
       break;
     case '3':
       await handleUpdateStatus();
@@ -52,6 +52,10 @@ async function handleAddStudent() {
   try {
     const idStr = await askQuestion('Enter Student ID (Number): ');
     const id = parseInt(idStr, 10);
+    if (isNaN(id)) throw new Error('Student ID must be a valid number');
+    if (studentRepo.getAll().some((s) => s.id === id)) {
+      throw new Error('Student with this ID already exists');
+    }
 
     const name = await askQuestion('Enter Student Name: ');
     const email = await askQuestion('Enter Student Email: ');
@@ -63,13 +67,16 @@ async function handleAddStudent() {
     console.log('4. Artificial Intelligence');
     const degChoice = await askQuestion('Select Department (1-4): ');
 
-    let degree = Degree.ComputerScience;
-    if (degChoice === '2') degree = Degree.SoftwareEngineering;
-    if (degChoice === '3') degree = Degree.DataScience;
-    if (degChoice === '4') degree = Degree.ArtificialIntelligence;
+    let degree = Degree.Null;
+    if (degChoice === '1') degree = Degree.ComputerScience;
+    else if (degChoice === '2') degree = Degree.SoftwareEngineering;
+    else if (degChoice === '3') degree = Degree.DataScience;
+    else if (degChoice === '4') degree = Degree.ArtificialIntelligence;
+    else throw new Error('Invalid degree choice');
 
     const gpaStr = await askQuestion('Enter GPA (0.0 - 4.0): ');
     const gpa = parseFloat(gpaStr);
+    if (isNaN(gpa)) throw new Error('GPA must be a valid number');
 
     const student = new Student(
       id,
@@ -102,6 +109,10 @@ async function handleUpdateStatus() {
   console.log('\n--- Update Student Status ---');
   const idStr = await askQuestion('Enter Student ID to update: ');
   const id = parseInt(idStr, 10);
+  if (isNaN(id)) {
+    console.log('Invalid ID entered');
+    return;
+  }
 
   const student = studentRepo.getAll().find((student) => student.id === id);
   if (!student) {
@@ -131,6 +142,10 @@ async function handleDeleteStudent() {
   console.log('\n--- Delete Student ---');
   const idStr = await askQuestion('Enter Student ID to delete: ');
   const id = parseInt(idStr, 10);
+  if (isNaN(id)) {
+    console.log('Invalid ID entered');
+    return;
+  }
 
   const success = studentRepo.deleteById(id);
   if (success) {
