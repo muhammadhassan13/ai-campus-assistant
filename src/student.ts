@@ -1,11 +1,24 @@
 // defining interfaces for Student data models
+
+export enum StudentStatus {
+  Active = 'ACTIVE',
+  Graduated = 'GRADUATED',
+  Suspended = 'SUSPENDED',
+}
+
+export enum Degree {
+  ComputerScience = 'Computer Science',
+  SoftwareEngineering = 'Software Engineering',
+  DataScience = 'Data Science',
+  ArtificialIntelligence = 'Artificial Intelligence',
+}
 export interface IStudent {
   id: number;
   name: string;
   email: string;
-  degree: string;
+  degree: Degree;
   gpa: number;
-  status: 'Active' | 'Graduated' | 'Suspended';
+  status: StudentStatus;
 }
 
 // creating Student class with constructor
@@ -15,14 +28,32 @@ export class Student implements IStudent {
     public id: number,
     public name: string,
     public email: string,
-    public degree: string,
+    public degree: Degree,
     public gpa: number,
-    public status: 'Active' | 'Graduated' | 'Suspended' = 'Active'
+    public status: StudentStatus = StudentStatus.Active
   ) {}
 
   // methods
   public getDetails(): string {
-    return `ID: ${this.id} | Name: ${this.name} | Degree: ${this.degree} | GPA: ${this.gpa.toFixed(2)} | Status: ${this.status}`;
+    return (
+      '[' +
+      this.id +
+      '] ' +
+      this.name +
+      '\n' +
+      'Department: ' +
+      this.degree +
+      '\n' +
+      'GPA: ' +
+      this.gpa +
+      '\n' +
+      'Status: ' +
+      this.status
+    );
+  }
+
+  public updateStatus(newStatus: StudentStatus): void {
+    this.status = newStatus;
   }
 
   public updateGpa(newGpa: number): void {
