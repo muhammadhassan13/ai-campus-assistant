@@ -1,5 +1,4 @@
 import { Student, Degree, StudentStatus } from './student.js';
-import { Course } from './course.js';
 import { Repository } from './repository.js';
 
 const studentRepo = new Repository<Student>();
@@ -25,17 +24,27 @@ const student2 = new Student(
 studentRepo.add(student1);
 studentRepo.add(student2);
 
-console.log('--- All Students ---');
-console.log(studentRepo.getAll());
+async function runDemo() {
+  console.log('Fetching student data from simulated API...');
+  // successful search
+  try {
+    const student = await studentRepo.fetchById(260);
+    console.log('\nSuccessfully fetched student: ', student.getDetails());
+  } catch (error) {
+    if (error instanceof Error) {
+      console.log('\nAPI Error caught: ', error.message);
+    }
+  }
 
-const courseRepo = new Repository<Course>();
+  // intentional unsuccessful search
+  try {
+    const student = await studentRepo.fetchById(999);
+    console.log('\nSuccessfully fetched student: ', student.getDetails());
+  } catch (error) {
+    if (error instanceof Error) {
+      console.log('\nAPI Error caught: ', error.message);
+    }
+  }
+}
 
-const course1 = new Course(101, 'Data Structures', 'CC201');
-
-const course2 = new Course(102, 'Object Oriented Programming', 'CC203');
-
-courseRepo.add(course1);
-courseRepo.add(course2);
-
-console.log('--- All Courses ---');
-console.log(courseRepo.getAll());
+runDemo();
