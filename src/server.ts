@@ -60,6 +60,32 @@ app.post('/api/students', (req, res) => {
   }
 });
 
+// GET/api/students -> get all students
+app.get('/api/students', (_req, res) => {
+  const students = studentRepo.getAll();
+  return res.status(200).json({
+    count: students.length,
+    students: students,
+  });
+});
+
+// GET/api/students/:id -> get single student or 404
+app.get('/api/students/:id', (req, res) => {
+  const id = Number(req.params.id);
+
+  if (isNaN(id)) {
+    return res.status(400).json({ error: 'Invalid Student ID parameter' });
+  }
+
+  const student = studentRepo.getAll().find((s) => s.id === id);
+
+  if (!student) {
+    return res.status(404).json({ error: 'Student with this ID not found' });
+  }
+
+  return res.status(200).json(student);
+});
+
 app.listen(PORT, () => {
   console.log('Server running on http://localhost:', PORT);
 });
