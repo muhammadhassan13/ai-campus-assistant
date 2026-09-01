@@ -13,9 +13,23 @@ import {
 import { Repository } from './repository.js';
 
 const app = express();
-const PORT = 3001; // Runs on 3001 so it won't conflict with server.ts (3000)
+const PORT = 3001;
 
 app.use(express.json());
+
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const start = Date.now();
+
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const timestamp = new Date().toISOString();
+    console.log(
+      `[${timestamp}] ${req.method} ${req.originalUrl} - ${res.statusCode} (${duration}ms)`
+    );
+  });
+
+  next();
+});
 
 const studentRepo = new Repository<Student>();
 
@@ -28,7 +42,7 @@ function mapDegree(degreeStr: string): Degree {
   return Degree.Null;
 }
 
-// POST /api/students -> forwards errors to Centralized Error Handler
+// POST /api/students
 app.post('/api/students', (req, res, next) => {
   try {
     const validatedData = createStudentSchema.parse(req.body);
@@ -79,7 +93,7 @@ app.get('/api/students/:id', (req, res) => {
   return res.status(200).json(student);
 });
 
-// PUT /api/students/:id -> full update with Zod validation
+// PUT /api/students/:id
 app.put('/api/students/:id', (req, res, next) => {
   try {
     const id = Number(req.params.id);
@@ -112,7 +126,7 @@ app.put('/api/students/:id', (req, res, next) => {
   }
 });
 
-// PATCH /api/students/:id -> partial update with Zod validation
+// PATCH /api/students/:id
 app.patch('/api/students/:id', (req, res, next) => {
   try {
     const id = Number(req.params.id);
@@ -161,12 +175,10 @@ app.delete('/api/students/:id', (req, res) => {
   return res.sendStatus(204);
 });
 
-// ITEM 7: Centralized Error Handling Middleware
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   console.error('Centralized Error Handler:', err);
 
-  // 1. Handle Zod Validation Errors
   if (err instanceof ZodError) {
     return res.status(400).json({
       error: 'Validation failed',
@@ -177,7 +189,6 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     });
   }
 
-  // 2. Handle Custom Domain / Syntax Errors
   if (err instanceof Error) {
     return res.status(400).json({
       error: 'Bad Request',
@@ -185,7 +196,6 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     });
   }
 
-  // 3. Fallback for unhandled internal server errors
   return res.status(500).json({
     error: 'Internal Server Error',
     message: 'An unexpected error occurred on the server.',
