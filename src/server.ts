@@ -9,7 +9,7 @@ app.use(express.json());
 
 const studentRepo = new Repository<Student>();
 
-// POST/api/students -> creates students and returns 201
+// POST /api/students -> creates students and returns 201
 app.post('/api/students', (req, res) => {
   try {
     const { id, name, email, degree, gpa } = req.body;
@@ -17,7 +17,7 @@ app.post('/api/students', (req, res) => {
     // validation checks
     if (!id || !name || !email || !degree || gpa === undefined) {
       return res.status(400).json({
-        error: 'All fields (id, name, email, degree, gpa) are required ',
+        error: 'All fields (id, name, email, degree, gpa) are required',
       });
     }
 
@@ -27,7 +27,7 @@ app.post('/api/students', (req, res) => {
         .json({ error: 'ID and GPA must be valid numbers' });
     }
 
-    // default degree matching
+    // degree mapping logic
     let mappedDegree = Degree.Null;
     if (degree === 'Computer Science') mappedDegree = Degree.ComputerScience;
     else if (degree === 'Software Engineering')
@@ -47,7 +47,6 @@ app.post('/api/students', (req, res) => {
 
     studentRepo.add(newStudent);
 
-    // return 201 created with the created student object
     return res.status(201).json({
       message: 'Student created successfully',
       student: newStudent,
@@ -56,11 +55,11 @@ app.post('/api/students', (req, res) => {
     if (error instanceof Error) {
       return res.status(500).json({ error: error.message });
     }
-    return res.status(500).json({ error: 'Internal server error ' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// GET/api/students -> get all students
+// GET /api/students -> get all students
 app.get('/api/students', (_req, res) => {
   const students = studentRepo.getAll();
   return res.status(200).json({
@@ -69,7 +68,7 @@ app.get('/api/students', (_req, res) => {
   });
 });
 
-// GET/api/students/:id -> get single student or 404
+// GET /api/students/:id -> get single student or 404
 app.get('/api/students/:id', (req, res) => {
   const id = Number(req.params.id);
 
@@ -84,6 +83,91 @@ app.get('/api/students/:id', (req, res) => {
   }
 
   return res.status(200).json(student);
+});
+
+// PUT /api/students/:id -> full update of a student record
+app.put('/api/students/:id', (req, res) => {
+  const id = Number(req.params.id);
+
+  if (isNaN(id)) {
+    return res.status(400).json({ error: 'Invalid Student ID parameter' });
+  }
+
+  const existingStudent = studentRepo.getById(id);
+  if (!existingStudent) {
+    return res.status(404).json({ error: 'Student with this ID not found' });
+  }
+
+  const { name, email, degree, gpa, status } = req.body;
+
+  if (!name || !email || !degree || gpa === undefined) {
+    return res.status(400).json({
+      error:
+        'All fields (name, email, degree, gpa) are required for full update',
+    });
+  }
+
+  let mappedDegree = Degree.Null;
+  if (degree === 'Computer Science') mappedDegree = Degree.ComputerScience;
+  else if (degree === 'Software Engineering')
+    mappedDegree = Degree.SoftwareEngineering;
+  else if (degree === 'Data Science') mappedDegree = Degree.DataScience;
+  else if (degree === 'Artificial Intelligence')
+    mappedDegree = Degree.ArtificialIntelligence;
+
+  const updatedStudent = studentRepo.update(id, {
+    name,
+    email,
+    degree: mappedDegree,
+    gpa: Number(gpa),
+    status: status !== undefined ? status : existingStudent.status,
+  });
+
+  return res.status(200).json({
+    message: 'Student updated successfully',
+    student: updatedStudent,
+  });
+});
+
+// PATCH /api/students/:id -> partial update of a student record
+app.patch('/api/students/:id', (req, res) => {
+  const id = Number(req.params.id);
+
+  if (isNaN(id)) {
+    return res.status(400).json({ error: 'Invalid Student ID parameter' });
+  }
+
+  const existingStudent = studentRepo.getById(id);
+  if (!existingStudent) {
+    return res.status(404).json({ error: 'Student with this ID not found' });
+  }
+
+  const updates = req.body;
+  if (!updates || Object.keys(updates).length === 0) {
+    return res
+      .status(400)
+      .json({ error: 'Request body must contain fields to update' });
+  }
+
+  if (updates.degree) {
+    if (updates.degree === 'Computer Science')
+      updates.degree = Degree.ComputerScience;
+    else if (updates.degree === 'Software Engineering')
+      updates.degree = Degree.SoftwareEngineering;
+    else if (updates.degree === 'Data Science')
+      updates.degree = Degree.DataScience;
+    else if (updates.degree === 'Artificial Intelligence')
+      updates.degree = Degree.ArtificialIntelligence;
+  }
+
+  if (updates.gpa !== undefined) updates.gpa = Number(updates.gpa);
+
+  const updatedStudent = studentRepo.update(id, updates);
+
+  return res.status(200).json({
+    message: 'Student partially updated successfully',
+    student: updatedStudent,
+  });
 });
 
 app.listen(PORT, () => {
