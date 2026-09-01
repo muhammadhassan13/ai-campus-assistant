@@ -170,6 +170,24 @@ app.patch('/api/students/:id', (req, res) => {
   });
 });
 
+// DELETE /api/students/:id -> removes a student record
+app.delete('/api/students/:id', (req, res) => {
+  const id = Number(req.params.id);
+
+  if (isNaN(id)) {
+    return res.status(400).json({ error: 'Invalid Student ID parameter' });
+  }
+
+  const deleted = studentRepo.deleteById(id);
+
+  if (!deleted) {
+    return res.status(404).json({ error: 'Student with this ID not found' });
+  }
+
+  // HTTP 204 No Content returns no response body
+  return res.status(200).json({ message: 'Student deleted successfully' });
+});
+
 app.listen(PORT, () => {
   console.log('Server running on http://localhost:', PORT);
 });
