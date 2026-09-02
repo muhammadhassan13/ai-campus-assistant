@@ -55,6 +55,47 @@ CREATE TABLE Query_Log (
     FOREIGN KEY (student_id) REFERENCES Student(student_id) ON DELETE CASCADE
 );
 
+-- populating the tables with dummy data
+INSERT INTO Instructor (name, email, department)
+VALUES
+('Dr. Sarah Ahmed', 'sarah.ahmed@campus.edu', 'Computer Science'),
+('Prof. Usman Khan', 'usman.khan@campus.edu', 'Software Engineering');
+
+INSERT INTO Student (name, email, degree, gpa, status)
+VALUES
+('Muhammad Hassan Naeem', 'hassan.naeem@student.campus.edu', 'BS Computer Science', 3.85, 'Active'),
+('Syed Shabih Haider', 'shabih.haider@student.campus.edu', 'BS Software Engineering', 3.70, 'Active');
+
+INSERT INTO Course (course_code, title, credits, instructor_id)
+VALUES
+('CS-201', 'Database Systems', 3, (SELECT instructor_id FROM Instructor WHERE email = 'sarah.ahmed@campus.edu')),
+('SE-302', 'Software Architecture', 3, (SELECT instructor_id FROM Instructor WHERE email = 'usman.khan@campus.edu'));
+
+INSERT INTO Assignment (title, max_score, due_date, course_id)
+VALUES
+('Assignment 1: ERD & Relational Schema', 100, '2026-09-15', (SELECT course_id FROM Course WHERE course_code = 'CS-201')),
+('Quiz 1: Architectural Patterns', 50, '2026-09-20', (SELECT course_id FROM Course WHERE course_code = 'SE-302'));
+
+INSERT INTO Enrollment (enrollment_date, grade, student_id, course_id)
+VALUES
+('2026-08-25', 'A', (SELECT student_id FROM Student WHERE email = 'hassan.naeem@student.campus.edu'), (SELECT course_id FROM Course WHERE course_code = 'CS-201')),
+('2026-08-25', 'A-', (SELECT student_id FROM Student WHERE email = 'shabih.haider@student.campus.edu'), (SELECT course_id FROM Course WHERE course_code = 'SE-302'));
+
+INSERT INTO Query_Log (prompt, response, student_id)
+VALUES
+('When is Assignment 1 for Database Systems due?', 'Assignment 1: ERD & Relational Schema is due on September 15, 2026.', (SELECT student_id FROM Student WHERE email = 'hassan.naeem@student.campus.edu'));
+
+-- Invalid Foreign Key Test
 INSERT INTO Course (course_code, title, credits, instructor_id) 
 VALUES
-('CS-101', 'Intro to Computer Science', 3, 9999);
+('CS-999', 'Broken Reference Course', 3, 9999);
+
+-- CHECK Constraint Violation Test
+INSERT INTO Course (course_code, title, credits, instructor_id) 
+VALUES
+('CS-500', 'Invalid Credits Course', 10, 1);
+
+-- UNIQUE Constraint Violation Test
+INSERT INTO Enrollment (enrollment_date, grade, student_id, course_id) 
+VALUES
+('2026-09-02', 'B+', 1, 1);
