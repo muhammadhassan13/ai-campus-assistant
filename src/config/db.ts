@@ -1,15 +1,10 @@
-import mysql from 'mysql2/promise';
-import dotenv from 'dotenv';
+import pkg from 'pg';
+const { Pool } = pkg;
 
-dotenv.config();
-
-export const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'ai_campus_assistant',
-  port: Number(process.env.DB_PORT) || 3306,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
+export const pool = new Pool({
+  host: process.env.PGHOST || 'localhost',
+  user: process.env.PGUSER || 'postgres',
+  password: process.env.PGPASSWORD || 'password',
+  database: process.env.PGDATABASE || 'ai_campus_assistant',
+  port: Number(process.env.PGPORT) || 5432,
 });
