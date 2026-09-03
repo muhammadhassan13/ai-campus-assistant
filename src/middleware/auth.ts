@@ -13,10 +13,8 @@ export const authenticateToken = (
   res: Response,
   next: NextFunction
 ) => {
-  // Extract authorization header safely (handles string or string[])
   const rawHeader = req.headers['authorization'];
   const authHeader = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader;
-
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
@@ -30,10 +28,16 @@ export const authenticateToken = (
       email: string;
     };
 
-    // Attach user payload to request
     req.user = decoded;
     next();
-  } catch {
-    return res.status(403).json({ error: 'Invalid or expired token.' });
+  } catch (err: unknown) {
+    // Narrow err type safely without using 'any'
+    if (err instanceof Error && err.name === 'TokenExpiredError') {
+      return res
+        .status(401)
+        .json({ error: 'Token has expired. Please log in again.' });
+    }
+
+    return res.status(403).json({ error: 'Invalid token.' });
   }
 };
