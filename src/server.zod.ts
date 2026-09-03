@@ -1,182 +1,256 @@
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
+import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { ZodError } from 'zod';
-
+import { pool } from './config/db.js';
 import {
-  Student,
-  Degree,
-  StudentStatus,
   createStudentSchema,
   updateStudentSchema,
   patchStudentSchema,
 } from './student.zod.js';
-import { Repository } from './repository.js';
 
 const app = express();
 const PORT = 3001;
 
 app.use(express.json());
 
+// Request logger middleware
 app.use((req: Request, res: Response, next: NextFunction) => {
   const start = Date.now();
-
   res.on('finish', () => {
     const duration = Date.now() - start;
-    const timestamp = new Date().toISOString();
     console.log(
-      `[${timestamp}] ${req.method} ${req.originalUrl} - ${res.statusCode} (${duration}ms)`
+      `[${new Date().toISOString()}] ${req.method} ${req.originalUrl} - ${res.statusCode} (${duration}ms)`
     );
   });
-
   next();
 });
 
-const studentRepo = new Repository<Student>();
-
-function mapDegree(degreeStr: string): Degree {
-  if (degreeStr === 'Computer Science') return Degree.ComputerScience;
-  if (degreeStr === 'Software Engineering') return Degree.SoftwareEngineering;
-  if (degreeStr === 'Data Science') return Degree.DataScience;
-  if (degreeStr === 'Artificial Intelligence')
-    return Degree.ArtificialIntelligence;
-  return Degree.Null;
+interface StudentRow extends RowDataPacket {
+  id: number;
+  name: string;
+  email: string;
+  degree: string;
+  gpa: number;
+  status: string;
 }
 
-// POST /api/students
-app.post('/api/students', (req, res, next) => {
-  try {
-    const validatedData = createStudentSchema.parse(req.body);
+// POST /api/students — MySQL auto-increments the ID
+app.post(
+  '/api/students',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const validatedData = createStudentSchema.parse(req.body);
 
-    const mappedDegree = mapDegree(validatedData.degree);
+      const [result] = await pool.query<ResultSetHeader>(
+        `INSERT INTO Student (name, email, degree, gpa, status) VALUES (?, ?, ?, ?, ?)`,
+        [
+          validatedData.name,
+          validatedData.email,
+          validatedData.degree,
+          validatedData.gpa,
+          validatedData.status,
+        ]
+      );
 
-    const newStudent = new Student(
-      validatedData.id,
-      validatedData.name,
-      validatedData.email,
-      mappedDegree,
-      validatedData.gpa,
-      StudentStatus.Active
-    );
+      const autoIncrementedId = result.insertId;
 
-    studentRepo.add(newStudent);
-
-    return res.status(201).json({
-      message: 'Student created successfully',
-      student: newStudent,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// GET all
-app.get('/api/students', (_req, res) => {
-  const students = studentRepo.getAll();
-  return res.status(200).json({
-    count: students.length,
-    students: students,
-  });
-});
-
-// GET by ID
-app.get('/api/students/:id', (req, res) => {
-  const id = Number(req.params.id);
-  if (isNaN(id)) {
-    return res.status(400).json({ error: 'Invalid Student ID parameter' });
-  }
-
-  const student = studentRepo.getById(id);
-  if (!student) {
-    return res.status(404).json({ error: 'Student with this ID not found' });
-  }
-
-  return res.status(200).json(student);
-});
-
-// PUT /api/students/:id
-app.put('/api/students/:id', (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ error: 'Invalid Student ID parameter' });
+      return res.status(201).json({
+        message: 'Student created successfully',
+        student: {
+          id: autoIncrementedId,
+          ...validatedData,
+        },
+      });
+    } catch (error) {
+      next(error);
     }
-
-    const existingStudent = studentRepo.getById(id);
-    if (!existingStudent) {
-      return res.status(404).json({ error: 'Student with this ID not found' });
-    }
-
-    const validatedData = updateStudentSchema.parse(req.body);
-    const mappedDegree = mapDegree(validatedData.degree);
-
-    const updatedStudent = studentRepo.update(id, {
-      name: validatedData.name,
-      email: validatedData.email,
-      degree: mappedDegree,
-      gpa: validatedData.gpa,
-      status: existingStudent.status,
-    });
-
-    return res.status(200).json({
-      message: 'Student updated successfully',
-      student: updatedStudent,
-    });
-  } catch (error) {
-    next(error);
   }
-});
+);
 
-// PATCH /api/students/:id
-app.patch('/api/students/:id', (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ error: 'Invalid Student ID parameter' });
+// GET /api/students — Fetch all from MySQL
+app.get(
+  '/api/students',
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const [rows] = await pool.query<StudentRow[]>(
+        `SELECT student_id AS id, name, email, degree, gpa, status FROM Student`
+      );
+
+      return res.status(200).json({
+        count: rows.length,
+        students: rows,
+      });
+    } catch (error) {
+      next(error);
     }
+  }
+);
 
-    const existingStudent = studentRepo.getById(id);
-    if (!existingStudent) {
-      return res.status(404).json({ error: 'Student with this ID not found' });
+// GET /api/students/:id — Fetch single student by auto-increment ID
+app.get(
+  '/api/students/:id',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = Number(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid Student ID parameter' });
+      }
+
+      const [rows] = await pool.query<StudentRow[]>(
+        `SELECT student_id AS id, name, email, degree, gpa, status FROM Student WHERE student_id = ?`,
+        [id]
+      );
+
+      if (rows.length === 0) {
+        return res
+          .status(404)
+          .json({ error: `Student with ID ${id} not found` });
+      }
+
+      return res.status(200).json(rows[0]);
+    } catch (error) {
+      next(error);
     }
+  }
+);
 
-    const validatedData = patchStudentSchema.parse(req.body);
+// PUT /api/students/:id — Full update by auto-increment ID
+app.put(
+  '/api/students/:id',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = Number(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid Student ID parameter' });
+      }
 
-    const updates: Partial<Student> = {};
-    if (validatedData.name !== undefined) updates.name = validatedData.name;
-    if (validatedData.email !== undefined) updates.email = validatedData.email;
-    if (validatedData.gpa !== undefined) updates.gpa = validatedData.gpa;
-    if (validatedData.degree !== undefined) {
-      updates.degree = mapDegree(validatedData.degree);
+      const validatedData = updateStudentSchema.parse(req.body);
+
+      const [result] = await pool.query<ResultSetHeader>(
+        `UPDATE Student SET name = ?, email = ?, degree = ?, gpa = ?, status = ? WHERE student_id = ?`,
+        [
+          validatedData.name,
+          validatedData.email,
+          validatedData.degree,
+          validatedData.gpa,
+          validatedData.status,
+          id,
+        ]
+      );
+
+      if (result.affectedRows === 0) {
+        return res
+          .status(404)
+          .json({ error: `Student with ID ${id} not found` });
+      }
+
+      return res.status(200).json({
+        message: 'Student updated successfully',
+        student: { id, ...validatedData },
+      });
+    } catch (error) {
+      next(error);
     }
-
-    const updatedStudent = studentRepo.update(id, updates);
-
-    return res.status(200).json({
-      message: 'Student partially updated successfully',
-      student: updatedStudent,
-    });
-  } catch (error) {
-    next(error);
   }
-});
+);
 
-// DELETE
-app.delete('/api/students/:id', (req, res) => {
-  const id = Number(req.params.id);
-  if (isNaN(id)) {
-    return res.status(400).json({ error: 'Invalid Student ID parameter' });
+// PATCH /api/students/:id — Partial update
+app.patch(
+  '/api/students/:id',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = Number(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid Student ID parameter' });
+      }
+
+      const validatedData = patchStudentSchema.parse(req.body);
+      const fieldsToUpdate: string[] = [];
+      const queryParams: (string | number)[] = [];
+
+      if (validatedData.name !== undefined) {
+        fieldsToUpdate.push('name = ?');
+        queryParams.push(validatedData.name);
+      }
+      if (validatedData.email !== undefined) {
+        fieldsToUpdate.push('email = ?');
+        queryParams.push(validatedData.email);
+      }
+      if (validatedData.degree !== undefined) {
+        fieldsToUpdate.push('degree = ?');
+        queryParams.push(validatedData.degree);
+      }
+      if (validatedData.gpa !== undefined) {
+        fieldsToUpdate.push('gpa = ?');
+        queryParams.push(validatedData.gpa);
+      }
+      if (validatedData.status !== undefined) {
+        fieldsToUpdate.push('status = ?');
+        queryParams.push(validatedData.status);
+      }
+
+      if (fieldsToUpdate.length === 0) {
+        return res.status(400).json({ error: 'No fields provided for update' });
+      }
+
+      queryParams.push(id);
+      const sql = `UPDATE Student SET ${fieldsToUpdate.join(', ')} WHERE student_id = ?`;
+
+      const [result] = await pool.query<ResultSetHeader>(sql, queryParams);
+
+      if (result.affectedRows === 0) {
+        return res
+          .status(404)
+          .json({ error: `Student with ID ${id} not found` });
+      }
+
+      // Return updated record
+      const [rows] = await pool.query<StudentRow[]>(
+        `SELECT student_id AS id, name, email, degree, gpa, status FROM Student WHERE student_id = ?`,
+        [id]
+      );
+
+      return res.status(200).json({
+        message: 'Student partially updated successfully',
+        student: rows[0],
+      });
+    } catch (error) {
+      next(error);
+    }
   }
+);
 
-  const deleted = studentRepo.deleteById(id);
-  if (!deleted) {
-    return res.status(404).json({ error: `Student with ID ${id} not found` });
+// DELETE /api/students/:id — Delete from MySQL by auto-increment ID
+app.delete(
+  '/api/students/:id',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = Number(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid Student ID parameter' });
+      }
+
+      const [result] = await pool.query<ResultSetHeader>(
+        `DELETE FROM Student WHERE student_id = ?`,
+        [id]
+      );
+
+      if (result.affectedRows === 0) {
+        return res
+          .status(404)
+          .json({ error: `Student with ID ${id} not found` });
+      }
+
+      return res.sendStatus(204);
+    } catch (error) {
+      next(error);
+    }
   }
+);
 
-  return res.sendStatus(204);
-});
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+// Centralized Error Handler
+app.use((err: unknown, _req: Request, res: Response) => {
   console.error('Centralized Error Handler:', err);
 
   if (err instanceof ZodError) {
@@ -203,5 +277,5 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Zod Server running on http://localhost:${PORT}`);
+  console.log(`Zod + MySQL Server running on http://localhost:${PORT}`);
 });
