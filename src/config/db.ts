@@ -1,10 +1,12 @@
-import pkg from 'pg';
-const { Pool } = pkg;
+import pg from 'pg';
+import dotenv from 'dotenv';
 
-export const pool = new Pool({
+dotenv.config();
+
+export const pool = new pg.Pool({
   host: process.env.PGHOST || 'localhost',
-  user: process.env.PGUSER || 'postgres',
-  password: process.env.PGPASSWORD || 'password',
-  database: process.env.PGDATABASE || 'ai_campus_assistant',
   port: Number(process.env.PGPORT) || 5432,
+  user: process.env.PGUSER || 'postgres',
+  password: process.env.PGPASSWORD,
+  database: process.env.PGDATABASE || 'student_db',
 });

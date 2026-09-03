@@ -72,3 +72,6 @@ CREATE TABLE query_log (
 INSERT INTO student (name, email, degree, gpa, status) VALUES
 ('Hassan Naeem', 'hassan@example.com', 'Computer Science', 3.80, 'Active'),
 ('Shabih Haider', 'shabih@example.com', 'Software Engineering', 3.65, 'Active');
+
+ALTER TABLE student 
+ADD COLUMN password_hash VARCHAR(255) NOT NULL DEFAULT '$2b$10$defaultHashPlaceholderValueForExistingRows123456789012';

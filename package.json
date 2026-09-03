@@ -17,6 +17,7 @@
   "license": "ISC",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/bcrypt": "^6.0.0",
     "@types/express": "^5.0.6",
     "@types/node": "^26.4.1",
     "@types/pg": "^8.23.1",
@@ -30,6 +31,7 @@
     "typescript-eslint": "^8.68.0"
   },
   "dependencies": {
+    "bcrypt": "^6.0.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "mysql2": "^3.24.3",
