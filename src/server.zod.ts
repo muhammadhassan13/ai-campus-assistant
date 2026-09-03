@@ -13,6 +13,7 @@ import {
   authenticateToken,
   type AuthenticatedRequest,
 } from './middleware/auth.js';
+import { checkOwnership } from './middleware/ownership.js';
 
 dotenv.config();
 
@@ -166,12 +167,13 @@ app.post('/api/students', async (req: Request, res: Response) => {
 });
 
 // ==========================================
-// PROTECTED ROUTES (Require Authorization Header)
+// PROTECTED & OWNERSHIP-RESTRICTED ROUTES
 // ==========================================
 
 app.put(
   '/api/students/:id',
   authenticateToken,
+  checkOwnership,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params;
@@ -216,6 +218,7 @@ app.put(
 app.patch(
   '/api/students/:id',
   authenticateToken,
+  checkOwnership,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params;
@@ -262,6 +265,7 @@ app.patch(
 app.delete(
   '/api/students/:id',
   authenticateToken,
+  checkOwnership,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params;

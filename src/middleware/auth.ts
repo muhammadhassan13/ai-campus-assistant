@@ -1,4 +1,4 @@
-import { type Request, type Response, type NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
 export interface AuthenticatedRequest extends Request {
@@ -13,8 +13,11 @@ export const authenticateToken = (
   res: Response,
   next: NextFunction
 ) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Extract 'Bearer <TOKEN>'
+  // Extract authorization header safely (handles string or string[])
+  const rawHeader = req.headers['authorization'];
+  const authHeader = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader;
+
+  const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
     return res.status(401).json({ error: 'Access denied. Token missing.' });
@@ -27,6 +30,7 @@ export const authenticateToken = (
       email: string;
     };
 
+    // Attach user payload to request
     req.user = decoded;
     next();
   } catch {
