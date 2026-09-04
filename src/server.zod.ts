@@ -59,7 +59,6 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    // Generate JWT Token (valid for 24 hours)
     const token = jwt.sign(
       { student_id: student.student_id, email: student.email },
       JWT_SECRET,
@@ -74,7 +73,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         name: student.name,
         email: student.email,
         degree: student.degree,
-        gpa: student.gpa,
+        gpa: parseFloat(student.gpa),
         status: student.status,
       },
     });
@@ -170,96 +169,72 @@ app.post('/api/students', async (req: Request, res: Response) => {
 // PROTECTED & OWNERSHIP-RESTRICTED ROUTES
 // ==========================================
 
-app.put(
-  '/api/students/:id',
-  authenticateToken,
-  checkOwnership,
-  async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const { id } = req.params;
-      const validatedData = updateStudentSchema.parse(req.body);
+async function handleStudentUpdate(
+  req: AuthenticatedRequest,
+  res: Response,
+  isPatch: boolean
+) {
+  try {
+    const { id } = req.params;
+    const schema = isPatch ? patchStudentSchema : updateStudentSchema;
+    const validatedData = schema.parse(req.body);
 
-      const result = await pool.query(
-        `UPDATE student 
-       SET name = $1, email = $2, degree = $3, gpa = $4, status = $5 
-       WHERE student_id = $6 
-       RETURNING student_id, name, email, degree, gpa, status`,
-        [
-          validatedData.name,
-          validatedData.email,
-          validatedData.degree,
-          validatedData.gpa,
-          validatedData.status,
-          id,
-        ]
+    const updateFields: Record<string, unknown> = { ...validatedData };
+
+    // Auto-hash password if provided in body
+    if (typeof updateFields.password === 'string') {
+      updateFields.password_hash = await bcrypt.hash(
+        updateFields.password,
+        SALT_ROUNDS
       );
-
-      if (result.rows.length === 0) {
-        return res.status(404).json({ error: 'Student not found' });
-      }
-
-      res.json({
-        message: 'Student updated successfully',
-        student: result.rows[0],
-      });
-    } catch (error: unknown) {
-      if (error instanceof ZodError) {
-        return res.status(400).json({ errors: error.issues });
-      }
-      console.error('Error updating student:', error);
-      res.status(500).json({
-        error: 'Failed to update student',
-        details: getErrorMessage(error),
-      });
+      delete updateFields.password;
     }
+
+    const keys = Object.keys(updateFields);
+    if (keys.length === 0) {
+      return res
+        .status(400)
+        .json({ error: 'No valid fields provided for update' });
+    }
+
+    const setClause = keys
+      .map((key, index) => `${key} = $${index + 1}`)
+      .join(', ');
+    const values = Object.values(updateFields);
+
+    const result = await pool.query(
+      `UPDATE student SET ${setClause} WHERE student_id = $${
+        keys.length + 1
+      } RETURNING student_id, name, email, degree, gpa, status`,
+      [...values, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    res.json({
+      message: `Student ${isPatch ? 'patched' : 'updated'} successfully`,
+      student: result.rows[0],
+    });
+  } catch (error: unknown) {
+    if (error instanceof ZodError) {
+      return res.status(400).json({ errors: error.issues });
+    }
+    console.error('Update error:', error);
+    res.status(500).json({
+      error: 'Failed to update student record',
+      details: getErrorMessage(error),
+    });
   }
+}
+
+app.put('/api/students/:id', authenticateToken, checkOwnership, (req, res) =>
+  handleStudentUpdate(req, res, false)
 );
 
-app.patch(
-  '/api/students/:id',
-  authenticateToken,
-  checkOwnership,
-  async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const { id } = req.params;
-      const validatedData = patchStudentSchema.parse(req.body);
-
-      const fields = Object.keys(validatedData);
-      if (fields.length === 0) {
-        return res.status(400).json({ error: 'No fields provided to update' });
-      }
-
-      const setClause = fields
-        .map((field, index) => `${field} = $${index + 1}`)
-        .join(', ');
-      const values = Object.values(validatedData);
-
-      const result = await pool.query(
-        `UPDATE student SET ${setClause} WHERE student_id = $${
-          fields.length + 1
-        } RETURNING student_id, name, email, degree, gpa, status`,
-        [...values, id]
-      );
-
-      if (result.rows.length === 0) {
-        return res.status(404).json({ error: 'Student not found' });
-      }
-
-      res.json({
-        message: 'Student partially updated successfully',
-        student: result.rows[0],
-      });
-    } catch (error: unknown) {
-      if (error instanceof ZodError) {
-        return res.status(400).json({ errors: error.issues });
-      }
-      console.error('Error patching student:', error);
-      res.status(500).json({
-        error: 'Failed to patch student',
-        details: getErrorMessage(error),
-      });
-    }
-  }
+app.patch('/api/students/:id', authenticateToken, checkOwnership, (req, res) =>
+  handleStudentUpdate(req, res, true)
 );
 
 app.delete(
@@ -289,19 +264,22 @@ app.delete(
   }
 );
 
+// DELETE /api/students (Bulk Delete & ID Reset)
 app.delete(
   '/api/students',
   authenticateToken,
   async (_req: Request, res: Response) => {
     try {
-      await pool.query('TRUNCATE TABLE student RESTART IDENTITY');
+      // TRUNCATE empties the table and resets the SERIAL ID counter to 1
+      await pool.query('TRUNCATE TABLE student RESTART IDENTITY CASCADE;');
+
       res.json({
-        message: 'All students deleted and ID sequence reset to 1 successfully',
+        message: 'All student records cleared and ID sequence reset to 1.',
       });
     } catch (error: unknown) {
-      console.error('Error deleting all students:', error);
+      console.error('Error clearing student table:', error);
       res.status(500).json({
-        error: 'Failed to delete all students',
+        error: 'Failed to clear students',
         details: getErrorMessage(error),
       });
     }

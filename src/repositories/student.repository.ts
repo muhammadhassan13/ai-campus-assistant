@@ -11,10 +11,7 @@ export interface StudentRecord {
 }
 
 export type CreateStudentDTO = Omit<StudentRecord, 'student_id'>;
-export type UpdateStudentDTO = Omit<
-  StudentRecord,
-  'student_id' | 'password_hash'
->;
+export type UpdateStudentDTO = Record<string, unknown>;
 
 export class StudentRepository {
   static async findByEmail(email: string): Promise<StudentRecord | null> {
@@ -59,13 +56,53 @@ export class StudentRepository {
   }
 
   static async update(id: number, data: UpdateStudentDTO) {
-    const result = await pool.query(
-      `UPDATE student 
-       SET name = $1, email = $2, degree = $3, gpa = $4, status = $5 
-       WHERE student_id = $6 
-       RETURNING student_id, name, email, degree, gpa, status`,
-      [data.name, data.email, data.degree, data.gpa, data.status, id]
-    );
+    // Safety purge: Never allow 'password' key to reach the SQL string builder
+    const cleanData = { ...data };
+    delete cleanData.password;
+
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    let queryIndex = 1;
+
+    // Explicit Whitelist for Database Columns ONLY
+    if (cleanData.name !== undefined) {
+      fields.push(`name = $${queryIndex++}`);
+      values.push(cleanData.name);
+    }
+    if (cleanData.email !== undefined) {
+      fields.push(`email = $${queryIndex++}`);
+      values.push(cleanData.email);
+    }
+    if (cleanData.password_hash !== undefined) {
+      fields.push(`password_hash = $${queryIndex++}`);
+      values.push(cleanData.password_hash);
+    }
+    if (cleanData.degree !== undefined) {
+      fields.push(`degree = $${queryIndex++}`);
+      values.push(cleanData.degree);
+    }
+    if (cleanData.gpa !== undefined) {
+      fields.push(`gpa = $${queryIndex++}`);
+      values.push(cleanData.gpa);
+    }
+    if (cleanData.status !== undefined) {
+      fields.push(`status = $${queryIndex++}`);
+      values.push(cleanData.status);
+    }
+
+    if (fields.length === 0) {
+      return this.findById(id);
+    }
+
+    values.push(id);
+    const query = `
+      UPDATE student 
+      SET ${fields.join(', ')} 
+      WHERE student_id = $${queryIndex} 
+      RETURNING student_id, name, email, degree, gpa, status
+    `;
+
+    const result = await pool.query(query, values);
     return result.rows[0] || null;
   }
 
