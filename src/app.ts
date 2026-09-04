@@ -1,16 +1,19 @@
 import express from 'express';
-import dotenv from 'dotenv';
-import studentRouter from './routes/student.routes.js';
+import studentRoutes from './routes/student.routes.js';
+import aiRoutes from './routes/ai.routes.js';
+import { errorHandler } from './middleware/error.middleware.js';
 
-dotenv.config();
-
+// 1. Declare 'app' FIRST
 const app = express();
-const PORT = process.env.PORT || 3001;
 
+// 2. Add middleware and routes AFTER declaration
 app.use(express.json());
-app.use('/api', studentRouter);
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+// 3. Mount API routes
+app.use('/api', studentRoutes);
+app.use('/api', aiRoutes);
+
+// 4. Global Error Middleware
+app.use(errorHandler);
+
 export default app;

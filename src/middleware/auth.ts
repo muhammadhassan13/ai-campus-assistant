@@ -12,13 +12,14 @@ export const authenticateToken = (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
-) => {
+): void => {
   const rawHeader = req.headers['authorization'];
   const authHeader = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader;
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
-    return res.status(401).json({ error: 'Access denied. Token missing.' });
+    res.status(401).json({ error: 'Access denied. Token missing.' });
+    return;
   }
 
   try {
@@ -31,13 +32,14 @@ export const authenticateToken = (
     req.user = decoded;
     next();
   } catch (err: unknown) {
-    // Narrow err type safely without using 'any'
     if (err instanceof Error && err.name === 'TokenExpiredError') {
-      return res
+      res
         .status(401)
         .json({ error: 'Token has expired. Please log in again.' });
+      return;
     }
 
-    return res.status(403).json({ error: 'Invalid token.' });
+    res.status(403).json({ error: 'Invalid token.' });
+    return;
   }
 };

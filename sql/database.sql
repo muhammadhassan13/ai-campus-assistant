@@ -1,6 +1,7 @@
 -- PostgreSQL Migration Script (ai_campus_assistant)
 
 -- Clean teardown (Migrate Down)
+DROP TABLE IF EXISTS conversation CASCADE;
 DROP TABLE IF EXISTS query_log CASCADE;
 DROP TABLE IF EXISTS enrollment CASCADE;
 DROP TABLE IF EXISTS assignment CASCADE;
@@ -20,6 +21,7 @@ CREATE TABLE student (
     student_id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL DEFAULT '$2b$10$defaultHashPlaceholderValueForExistingRows123456789012',
     degree VARCHAR(100) NOT NULL,
     gpa NUMERIC(3, 2) DEFAULT 0.00,
     status VARCHAR(50) DEFAULT 'Active'
@@ -68,10 +70,15 @@ CREATE TABLE query_log (
         REFERENCES student(student_id) ON DELETE CASCADE
 );
 
--- Seed Initial Test Data
-INSERT INTO student (name, email, degree, gpa, status) VALUES
-('Hassan Naeem', 'hassan@example.com', 'Computer Science', 3.80, 'Active'),
-('Shabih Haider', 'shabih@example.com', 'Software Engineering', 3.65, 'Active');
+CREATE TABLE IF NOT EXISTS conversation (
+    conversation_id SERIAL PRIMARY KEY,
+    student_id INT REFERENCES student(student_id) ON DELETE CASCADE,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'model')),
+    message TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
-ALTER TABLE student 
-ADD COLUMN password_hash VARCHAR(255) NOT NULL DEFAULT '$2b$10$defaultHashPlaceholderValueForExistingRows123456789012';
+-- Seed Initial Test Data
+INSERT INTO student (name, email, password_hash, degree, gpa, status) VALUES
+('Hassan Naeem', 'hassan@example.com', '$2b$10$defaultHashPlaceholderValueForExistingRows123456789012', 'Computer Science', 3.80, 'Active'),
+('Shabih Haider', 'shabih@example.com', '$2b$10$defaultHashPlaceholderValueForExistingRows123456789012', 'Software Engineering', 3.65, 'Active');

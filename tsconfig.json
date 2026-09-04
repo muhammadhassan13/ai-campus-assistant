@@ -10,8 +10,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "verbatimModuleSyntax": true,
-    "types": ["node"]
+    "verbatimModuleSyntax": true
   },
   "include": ["src/**/*"]
 }
