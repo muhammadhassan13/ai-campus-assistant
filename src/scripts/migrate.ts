@@ -1,37 +1,29 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { pool } from '../config/db.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 async function runMigration() {
   try {
-    console.log('Starting migration lifecycle...');
+    console.log('Resetting database: dropping existing structures...');
 
-    const sqlFilePath = path.join(__dirname, '../../sql/database.sql');
-    if (!fs.existsSync(sqlFilePath)) {
-      console.warn(
-        `SQL schema file not found at ${sqlFilePath}. Executing direct Postgres fallback creation...`
+    // Drop table if it exists to wipe all old structure and entries
+    await pool.query(`DROP TABLE IF EXISTS student CASCADE;`);
+
+    console.log('Creating fresh table schema...');
+
+    // Recreate the student table structure from scratch
+    await pool.query(`
+      CREATE TABLE student (
+        student_id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        email VARCHAR(100) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        degree VARCHAR(100) NOT NULL,
+        gpa NUMERIC(3, 2) NOT NULL,
+        status VARCHAR(20) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS student (
-          student_id SERIAL PRIMARY KEY,
-          name VARCHAR(255) NOT NULL,
-          email VARCHAR(255) UNIQUE NOT NULL,
-          password_hash VARCHAR(255) NOT NULL,
-          degree VARCHAR(100) DEFAULT 'Not specified',
-          gpa NUMERIC(3,2) DEFAULT 0.00,
-          status VARCHAR(50) DEFAULT 'Active'
-        );
-      `);
-    } else {
-      const sqlScript = fs.readFileSync(sqlFilePath, 'utf8');
-      await pool.query(sqlScript);
-    }
+    `);
 
-    console.log('Migration completed successfully!');
+    console.log('Database successfully reset and schema migrated!');
     process.exit(0);
   } catch (error) {
     console.error('Migration failed:', error);

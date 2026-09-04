@@ -5,6 +5,7 @@ async function seedDatabase() {
   try {
     console.log('Starting PostgreSQL database seeding...');
 
+    // Clear existing data and reset auto-increment ID counter
     await pool.query('TRUNCATE TABLE student RESTART IDENTITY CASCADE;');
 
     const defaultPasswordHash = await bcrypt.hash('Password123', 10);

@@ -2,8 +2,8 @@ import { pool } from '../config/db.js';
 
 async function verifyData() {
   try {
-    const [students] = await pool.query('SELECT * FROM Student;');
-    const [courses] = await pool.query('SELECT * FROM Course;');
+    const { rows: students } = await pool.query('SELECT * FROM Student;');
+    const { rows: courses } = await pool.query('SELECT * FROM Course;');
 
     console.log('--- STUDENTS TABLE ---');
     console.table(students);

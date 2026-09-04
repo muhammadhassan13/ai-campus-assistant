@@ -1,39 +1,44 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import {
-  StudentRepository,
-  type CreateStudentDTO,
-} from '../repositories/student.repository.js';
+import { StudentRepository } from '../repositories/student.repository.js';
+import type {
+  CreateStudentDTO,
+  UpdateStudentDTO,
+  StudentResponseDTO,
+  AuthResponseDTO,
+  UpdateStudentRepoPayload,
+} from '../student.zod.js';
 
 const SALT_ROUNDS = 10;
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 
 export class StudentService {
-  static async updateStudent(id: number, data: Record<string, unknown>) {
-    const updatePayload: Record<string, unknown> = { ...data };
+  static async updateStudent(
+    id: number,
+    data: UpdateStudentDTO
+  ): Promise<StudentResponseDTO | null> {
+    const updatePayload: UpdateStudentRepoPayload = {
+      name: data.name,
+      email: data.email,
+      degree: data.degree,
+      gpa: data.gpa,
+      status: data.status,
+    };
 
-    // Extract raw password input from either key name
-    const rawPassword = (updatePayload.password ||
-      updatePayload.password_hash) as string | undefined;
-
-    if (rawPassword && typeof rawPassword === 'string') {
-      const hashedPassword = await bcrypt.hash(rawPassword, SALT_ROUNDS);
-
-      // Store hash directly under the database column name
-      updatePayload.password_hash = hashedPassword;
-
-      // Purge raw 'password' key
-      delete updatePayload.password;
+    if (data.password) {
+      updatePayload.password_hash = await bcrypt.hash(
+        data.password,
+        SALT_ROUNDS
+      );
     }
 
-    if (Object.keys(updatePayload).length > 0) {
-      await StudentRepository.update(id, updatePayload);
-    }
-
-    return await StudentRepository.findById(id);
+    return await StudentRepository.update(id, updatePayload);
   }
 
-  static async authenticateUser(email: string, password: string) {
+  static async authenticateUser(
+    email: string,
+    password: string
+  ): Promise<AuthResponseDTO> {
     const student = await StudentRepository.findByEmail(email);
     if (!student) throw new Error('INVALID_CREDENTIALS');
 
@@ -46,31 +51,45 @@ export class StudentService {
       { expiresIn: '24h' }
     );
 
-    const safeStudent = { ...student };
-    delete (safeStudent as { password_hash?: string }).password_hash;
+    const safeStudent: StudentResponseDTO = {
+      student_id: student.student_id,
+      name: student.name,
+      email: student.email,
+      degree: student.degree,
+      gpa: Number(student.gpa),
+      status: student.status,
+    };
 
     return { token, student: safeStudent };
   }
 
   static async registerStudent(
-    data: Omit<CreateStudentDTO, 'password_hash'> & { password: string }
-  ) {
+    data: CreateStudentDTO
+  ): Promise<StudentResponseDTO> {
     const hashedPassword = await bcrypt.hash(data.password, SALT_ROUNDS);
     return await StudentRepository.create({
-      ...data,
+      name: data.name,
+      email: data.email,
       password_hash: hashedPassword,
+      degree: data.degree,
+      gpa: data.gpa,
+      status: data.status,
     });
   }
 
-  static async getStudentById(id: number) {
+  static async getStudentById(id: number): Promise<StudentResponseDTO | null> {
     return await StudentRepository.findById(id);
   }
 
-  static async getAllStudents() {
+  static async getAllStudents(): Promise<StudentResponseDTO[]> {
     return await StudentRepository.findAll();
   }
 
-  static async removeStudent(id: number) {
+  static async removeStudent(id: number): Promise<boolean> {
     return await StudentRepository.deleteById(id);
+  }
+
+  static async clearAllStudents(): Promise<void> {
+    return await StudentRepository.deleteAll();
   }
 }

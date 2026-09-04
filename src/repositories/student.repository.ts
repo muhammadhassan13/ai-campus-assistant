@@ -1,45 +1,39 @@
 import { pool } from '../config/db.js';
-
-export interface StudentRecord {
-  student_id: number;
-  name: string;
-  email: string;
-  password_hash: string;
-  degree: string;
-  gpa: number;
-  status: string;
-}
-
-export type CreateStudentDTO = Omit<StudentRecord, 'student_id'>;
-export type UpdateStudentDTO = Record<string, unknown>;
+import type {
+  StudentRecord,
+  StudentResponseDTO,
+  CreateStudentRepoPayload,
+  UpdateStudentRepoPayload,
+} from '../student.zod.js';
 
 export class StudentRepository {
   static async findByEmail(email: string): Promise<StudentRecord | null> {
-    const result = await pool.query('SELECT * FROM student WHERE email = $1', [
-      email,
-    ]);
+    const result = await pool.query<StudentRecord>(
+      'SELECT * FROM student WHERE email = $1',
+      [email]
+    );
     return result.rows[0] || null;
   }
 
-  static async findById(
-    id: number
-  ): Promise<Omit<StudentRecord, 'password_hash'> | null> {
-    const result = await pool.query(
+  static async findById(id: number): Promise<StudentResponseDTO | null> {
+    const result = await pool.query<StudentResponseDTO>(
       'SELECT student_id, name, email, degree, gpa, status FROM student WHERE student_id = $1',
       [id]
     );
     return result.rows[0] || null;
   }
 
-  static async findAll(): Promise<Omit<StudentRecord, 'password_hash'>[]> {
-    const result = await pool.query(
+  static async findAll(): Promise<StudentResponseDTO[]> {
+    const result = await pool.query<StudentResponseDTO>(
       'SELECT student_id, name, email, degree, gpa, status FROM student ORDER BY student_id ASC'
     );
     return result.rows;
   }
 
-  static async create(data: CreateStudentDTO) {
-    const result = await pool.query(
+  static async create(
+    data: CreateStudentRepoPayload
+  ): Promise<StudentResponseDTO> {
+    const result = await pool.query<StudentResponseDTO>(
       `INSERT INTO student (name, email, password_hash, degree, gpa, status) 
        VALUES ($1, $2, $3, $4, $5, $6) 
        RETURNING student_id, name, email, degree, gpa, status`,
@@ -55,39 +49,37 @@ export class StudentRepository {
     return result.rows[0];
   }
 
-  static async update(id: number, data: UpdateStudentDTO) {
-    // Safety purge: Never allow 'password' key to reach the SQL string builder
-    const cleanData = { ...data };
-    delete cleanData.password;
-
+  static async update(
+    id: number,
+    data: UpdateStudentRepoPayload
+  ): Promise<StudentResponseDTO | null> {
     const fields: string[] = [];
     const values: unknown[] = [];
     let queryIndex = 1;
 
-    // Explicit Whitelist for Database Columns ONLY
-    if (cleanData.name !== undefined) {
+    if (data.name !== undefined) {
       fields.push(`name = $${queryIndex++}`);
-      values.push(cleanData.name);
+      values.push(data.name);
     }
-    if (cleanData.email !== undefined) {
+    if (data.email !== undefined) {
       fields.push(`email = $${queryIndex++}`);
-      values.push(cleanData.email);
+      values.push(data.email);
     }
-    if (cleanData.password_hash !== undefined) {
+    if (data.password_hash !== undefined) {
       fields.push(`password_hash = $${queryIndex++}`);
-      values.push(cleanData.password_hash);
+      values.push(data.password_hash);
     }
-    if (cleanData.degree !== undefined) {
+    if (data.degree !== undefined) {
       fields.push(`degree = $${queryIndex++}`);
-      values.push(cleanData.degree);
+      values.push(data.degree);
     }
-    if (cleanData.gpa !== undefined) {
+    if (data.gpa !== undefined) {
       fields.push(`gpa = $${queryIndex++}`);
-      values.push(cleanData.gpa);
+      values.push(data.gpa);
     }
-    if (cleanData.status !== undefined) {
+    if (data.status !== undefined) {
       fields.push(`status = $${queryIndex++}`);
-      values.push(cleanData.status);
+      values.push(data.status);
     }
 
     if (fields.length === 0) {
@@ -102,7 +94,7 @@ export class StudentRepository {
       RETURNING student_id, name, email, degree, gpa, status
     `;
 
-    const result = await pool.query(query, values);
+    const result = await pool.query<StudentResponseDTO>(query, values);
     return result.rows[0] || null;
   }
 
@@ -112,5 +104,9 @@ export class StudentRepository {
       [id]
     );
     return (result.rowCount ?? 0) > 0;
+  }
+
+  static async deleteAll(): Promise<void> {
+    await pool.query('TRUNCATE TABLE student RESTART IDENTITY CASCADE;');
   }
 }
