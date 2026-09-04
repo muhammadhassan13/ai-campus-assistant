@@ -12,26 +12,12 @@ export class AIProxyService implements IAIService {
   }
 
   async generateResponse(studentId: number, prompt: string): Promise<string> {
-    // Explicit manual toggle override via .env
+    // Keep mock mode available for intentional offline development.
     if (process.env.USE_MOCK_AI === 'true') {
       console.info('[AIProxy]: USE_MOCK_AI=true. Serving mock response.');
       return this.fallbackService.generateResponse(studentId, prompt);
     }
 
-    try {
-      // Priority 1: Attempts live LLM generation
-      return await this.primaryService.generateResponse(studentId, prompt);
-    } catch (error: unknown) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-
-      // Priority 2: Intercepts failures and routes to local fallback
-      console.warn('======================================================');
-      console.warn('[AIProxy Guard/Fallback Triggered]:');
-      console.warn(errorMsg);
-      console.warn('-> Gracefully defaulting response to MockAIService.');
-      console.warn('======================================================');
-
-      return await this.fallbackService.generateResponse(studentId, prompt);
-    }
+    return this.primaryService.generateResponse(studentId, prompt);
   }
 }

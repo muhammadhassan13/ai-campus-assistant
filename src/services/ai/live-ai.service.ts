@@ -1,36 +1,13 @@
+import Groq from 'groq-sdk';
 import { pool } from '../../config/db.js';
 import { type IAIService } from './ai.interface.js';
 
 export class LiveAIService implements IAIService {
-  /**
-   * Validates whether the provided API key is valid (Groq gsk_ or Gemini AIzaSy keys).
-   */
-  private isValidKey(key: string | undefined): boolean {
-    if (!key) return false;
-    const cleanKey = key.trim();
-
-    if (
-      cleanKey === '' ||
-      cleanKey === 'your_gemini_api_key' ||
-      cleanKey === 'your_groq_api_key' ||
-      cleanKey === 'placeholder' ||
-      cleanKey.startsWith('your_') ||
-      cleanKey.startsWith('AQ.') // Rejects temporary GCP OAuth tokens
-    ) {
-      return false;
-    }
-
-    return cleanKey.startsWith('gsk_') || cleanKey.startsWith('AIzaSy');
-  }
-
   async generateResponse(studentId: number, prompt: string): Promise<string> {
-    const apiKey = process.env.GROQ_API_KEY || process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY?.trim();
 
-    // 1. Fail fast if key is missing, placeholder, or invalid format
-    if (!this.isValidKey(apiKey)) {
-      throw new Error(
-        `[Guard Triggered]: API key is missing or invalid placeholder. Routing to MockAIService.`
-      );
+    if (!apiKey || apiKey === 'your_groq_api_key' || apiKey === 'placeholder') {
+      throw new Error('GROQ_API_KEY is missing or still set to a placeholder.');
     }
 
     // 2. Log user prompt to PostgreSQL
@@ -43,47 +20,31 @@ export class LiveAIService implements IAIService {
       console.error('[Database Warning]: Failed to log user prompt:', dbErr);
     }
 
-    // 3. Direct REST Call to Groq (llama3-8b-8192)
-    const response = await fetch(
-      'https://api.groq.com/openai/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+    const groq = new Groq({ apiKey });
+    const response = await groq.chat.completions.create({
+      model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a helpful, concise AI Campus Assistant for university students.',
         },
-        body: JSON.stringify({
-          model: 'llama3-8b-8192', // <-- UPDATED MODEL SLUG
-          messages: [
-            {
-              role: 'system',
-              content:
-                'You are a helpful, concise AI Campus Assistant for university students.',
-            },
-            { role: 'user', content: prompt },
-          ],
-          temperature: 0.7,
-          max_tokens: 300,
-        }),
-      }
-    );
+        { role: 'user', content: prompt },
+      ],
+      temperature: 1,
+      max_completion_tokens: 2048,
+      top_p: 1,
+      reasoning_effort: 'medium',
+      stream: true,
+    });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `Groq Live REST API Error (${response.status}): ${errorText}`
-      );
+    let reply = '';
+    for await (const chunk of response) {
+      reply += chunk.choices[0]?.delta?.content || '';
     }
 
-    const data = (await response.json()) as {
-      choices?: Array<{
-        message?: { content?: string };
-      }>;
-    };
-
-    const reply =
-      data.choices?.[0]?.message?.content?.trim() ||
-      'No text returned from AI Model.';
+    reply = reply.trim();
+    if (!reply) throw new Error('Groq returned an empty response.');
 
     // 4. Log model response to PostgreSQL
     try {
