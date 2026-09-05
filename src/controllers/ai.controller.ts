@@ -1,6 +1,7 @@
 import type { Response } from 'express';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
 import { AIProxyService } from '../services/ai/ai-proxy.service.js';
+import { AIRepository } from '../repositories/ai.repository.js';
 
 const aiProxy = new AIProxyService();
 
@@ -44,6 +45,37 @@ export class AIController {
       res.status(500).json({
         success: false,
         error: 'An internal server error occurred while processing your query.',
+      });
+    }
+  }
+
+  async getHistory(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const studentId = req.user?.student_id;
+
+      if (!studentId) {
+        res.status(401).json({
+          success: false,
+          error: 'Unauthorized: Missing student token',
+        });
+        return;
+      }
+
+      const history = await AIRepository.getHistory(studentId, 20);
+
+      res.status(200).json({
+        success: true,
+        data: history,
+      });
+    } catch (error: unknown) {
+      console.error(
+        '[AIControllerFatal]: Failed to fetch chat history:',
+        error
+      );
+      res.status(500).json({
+        success: false,
+        error:
+          'An internal server error occurred while fetching conversation history.',
       });
     }
   }
