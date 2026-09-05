@@ -37,8 +37,12 @@ export class LiveAIService implements IAIService {
       { role: 'user' as const, content: prompt },
     ];
 
-    // 5. Call Groq with full context
-    const groq = new Groq({ apiKey });
+    // 5. Call Groq with full context and a 25-second client timeout guard
+    const groq = new Groq({
+      apiKey,
+      timeout: 25000,
+    });
+
     const response = await groq.chat.completions.create({
       model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
       messages,
