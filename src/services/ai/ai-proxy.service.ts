@@ -18,6 +18,16 @@ export class AIProxyService implements IAIService {
       return this.fallbackService.generateResponse(studentId, prompt);
     }
 
-    return this.primaryService.generateResponse(studentId, prompt);
+    try {
+      return await this.primaryService.generateResponse(studentId, prompt);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+
+      console.warn(
+        `[AIProxy]: Groq failed; using mock response. ${errorMessage}`
+      );
+      return this.fallbackService.generateResponse(studentId, prompt);
+    }
   }
 }
