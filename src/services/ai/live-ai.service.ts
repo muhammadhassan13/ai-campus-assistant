@@ -1,6 +1,10 @@
 import Groq from 'groq-sdk';
 import { AIRepository } from '../../repositories/ai.repository.js';
 import { type IAIService } from './ai.interface.js';
+import {
+  SYSTEM_PROMPT,
+  FEW_SHOT_EXAMPLES,
+} from '../../config/prompt.config.js';
 
 export class LiveAIService implements IAIService {
   async generateResponse(studentId: number, prompt: string): Promise<string> {
@@ -26,13 +30,16 @@ export class LiveAIService implements IAIService {
       console.error('[Database Warning]: Failed to log user prompt:', dbErr);
     }
 
-    // 4. Combine system prompt + history + current prompt
+    // 4. Combine system prompt + few-shot examples + history + current prompt
     const messages = [
       {
         role: 'system' as const,
-        content:
-          'You are a helpful, concise AI Campus Assistant for university students.',
+        content: SYSTEM_PROMPT,
       },
+      ...FEW_SHOT_EXAMPLES.map((ex) => ({
+        role: ex.role as 'user' | 'assistant',
+        content: ex.content,
+      })),
       ...formattedHistory,
       { role: 'user' as const, content: prompt },
     ];
@@ -46,7 +53,7 @@ export class LiveAIService implements IAIService {
     const response = await groq.chat.completions.create({
       model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
       messages,
-      temperature: 1,
+      temperature: 0.7,
       max_completion_tokens: 2048,
       top_p: 1,
       stream: true,
