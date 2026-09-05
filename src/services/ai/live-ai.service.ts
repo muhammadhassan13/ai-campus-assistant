@@ -1,5 +1,5 @@
 import Groq from 'groq-sdk';
-import { pool } from '../../config/db.js';
+import { AIRepository } from '../../repositories/ai.repository.js';
 import { type IAIService } from './ai.interface.js';
 
 export class LiveAIService implements IAIService {
@@ -10,16 +10,14 @@ export class LiveAIService implements IAIService {
       throw new Error('GROQ_API_KEY is missing or still set to a placeholder.');
     }
 
-    // 2. Log user prompt to PostgreSQL
+    // 1. Log user prompt via Repository
     try {
-      await pool.query(
-        'INSERT INTO conversation (student_id, role, message) VALUES ($1, $2, $3)',
-        [studentId, 'user', prompt]
-      );
+      await AIRepository.saveMessage(studentId, 'user', prompt);
     } catch (dbErr) {
       console.error('[Database Warning]: Failed to log user prompt:', dbErr);
     }
 
+    // 2. Call Groq API
     const groq = new Groq({ apiKey });
     const response = await groq.chat.completions.create({
       model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
@@ -46,12 +44,9 @@ export class LiveAIService implements IAIService {
     reply = reply.trim();
     if (!reply) throw new Error('Groq returned an empty response.');
 
-    // 4. Log model response to PostgreSQL
+    // 3. Log model response via Repository
     try {
-      await pool.query(
-        'INSERT INTO conversation (student_id, role, message) VALUES ($1, $2, $3)',
-        [studentId, 'model', reply]
-      );
+      await AIRepository.saveMessage(studentId, 'model', reply);
     } catch (dbErr) {
       console.error('[Database Warning]: Failed to log model response:', dbErr);
     }

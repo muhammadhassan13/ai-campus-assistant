@@ -1,4 +1,4 @@
-import { pool } from '../../config/db.js';
+import { AIRepository } from '../../repositories/ai.repository.js';
 import { type IAIService } from './ai.interface.js';
 
 export class MockAIService implements IAIService {
@@ -21,20 +21,14 @@ export class MockAIService implements IAIService {
   }
 
   async generateResponse(studentId: number, prompt: string): Promise<string> {
-    // 1. Persist user message
-    await pool.query(
-      'INSERT INTO conversation (student_id, role, message) VALUES ($1, $2, $3)',
-      [studentId, 'user', prompt]
-    );
+    // 1. Log user prompt via Repository
+    await AIRepository.saveMessage(studentId, 'user', prompt);
 
-    // 2. Generate response matching the prompt context
+    // 2. Generate response matching prompt context
     const responseText = this.getSmartMockResponse(prompt);
 
-    // 3. Persist model response
-    await pool.query(
-      'INSERT INTO conversation (student_id, role, message) VALUES ($1, $2, $3)',
-      [studentId, 'model', responseText]
-    );
+    // 3. Log model response via Repository
+    await AIRepository.saveMessage(studentId, 'model', responseText);
 
     return responseText;
   }
