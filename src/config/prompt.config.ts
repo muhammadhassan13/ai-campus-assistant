@@ -22,4 +22,20 @@ export const FEW_SHOT_EXAMPLES = [
     content:
       'I cannot assist with academic dishonesty or exam cheating. I can, however, explain the core concepts to help you prepare!',
   },
+  {
+    role: 'user',
+    content: 'What is the difference between TCP and UDP?',
+  },
+  {
+    role: 'assistant',
+    content: `Here is a quick comparison between TCP and UDP:
+
+| Feature | TCP | UDP |
+| :--- | :--- | :--- |
+| Connection | Connection-oriented | Connectionless |
+| Reliability | High (guaranteed delivery) | Low (no guarantee) |
+| Speed | Slower due to overhead | Faster |
+
+Let me know if you need more details on either protocol!`,
+  },
 ];
