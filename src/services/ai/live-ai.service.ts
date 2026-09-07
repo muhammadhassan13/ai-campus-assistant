@@ -1,12 +1,39 @@
 import Groq from 'groq-sdk';
-import { AIRepository } from '../../repositories/ai.repository.js';
+import {
+  AIRepository,
+  type ChatMessage,
+} from '../../repositories/ai.repository.js';
 import { type IAIService } from './ai.interface.js';
 import {
   SYSTEM_PROMPT,
   FEW_SHOT_EXAMPLES,
 } from '../../config/prompt.config.js';
 
+// Configuration thresholds for context window and safety
+const MAX_HISTORY_MESSAGES = 10; // Adjust as needed (e.g., set to 5 for quick local testing, 10 for production)
+const MAX_MESSAGE_CHAR_LENGTH = 1000; // Character limit guard per message
+
 export class LiveAIService implements IAIService {
+  /**
+   * Helper method to enforce token/context length constraints by truncating
+   * oversized individual messages and capping history to MAX_HISTORY_MESSAGES.
+   */
+  private truncateHistory(
+    history: ChatMessage[]
+  ): Array<{ role: 'user' | 'assistant'; content: string }> {
+    return history.slice(-MAX_HISTORY_MESSAGES).map((msg) => {
+      let content = msg.message;
+      if (content.length > MAX_MESSAGE_CHAR_LENGTH) {
+        content =
+          content.substring(0, MAX_MESSAGE_CHAR_LENGTH) + '... [truncated]';
+      }
+      return {
+        role: msg.role === 'model' ? ('assistant' as const) : ('user' as const),
+        content,
+      };
+    });
+  }
+
   async generateResponse(studentId: number, prompt: string): Promise<string> {
     const apiKey = process.env.GROQ_API_KEY?.trim();
 
@@ -15,13 +42,13 @@ export class LiveAIService implements IAIService {
     }
 
     // 1. Fetch previous conversation history for this student
-    const history = await AIRepository.getHistory(studentId, 10);
+    const rawHistory = await AIRepository.getHistory(
+      studentId,
+      MAX_HISTORY_MESSAGES
+    );
 
-    // 2. Map existing DB history to Groq's expected format
-    const formattedHistory = history.map((msg) => ({
-      role: msg.role === 'model' ? ('assistant' as const) : ('user' as const),
-      content: msg.message,
-    }));
+    // 2. Truncate history to stay safely under context token limits
+    const formattedHistory = this.truncateHistory(rawHistory);
 
     // 3. Save current incoming user prompt to DB
     try {
@@ -44,7 +71,7 @@ export class LiveAIService implements IAIService {
       { role: 'user' as const, content: prompt },
     ];
 
-    // 5. Call Groq with full context and a 25-second client timeout guard
+    // 5. Call Groq API with full context payload and 25-second client timeout guard
     const groq = new Groq({
       apiKey,
       timeout: 25000,
