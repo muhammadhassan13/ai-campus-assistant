@@ -82,3 +82,10 @@ CREATE TABLE IF NOT EXISTS conversation (
 INSERT INTO student (name, email, password_hash, degree, gpa, status) VALUES
 ('Hassan Naeem', 'hassan@example.com', '$2b$10$defaultHashPlaceholderValueForExistingRows123456789012', 'Computer Science', 3.80, 'Active'),
 ('Shabih Haider', 'shabih@example.com', '$2b$10$defaultHashPlaceholderValueForExistingRows123456789012', 'Software Engineering', 3.65, 'Active');
+
+CREATE TABLE IF NOT EXISTS user_preferences (
+  student_id INT PRIMARY KEY,
+  preferred_language VARCHAR(50) DEFAULT 'English',
+  preferred_tech_stack VARCHAR(100) DEFAULT 'TypeScript/Node.js',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

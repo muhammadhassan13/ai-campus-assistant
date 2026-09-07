@@ -9,15 +9,10 @@ import {
   FEW_SHOT_EXAMPLES,
 } from '../../config/prompt.config.js';
 
-// Configuration thresholds for context window and safety
-const MAX_HISTORY_MESSAGES = 10; // Adjust as needed (e.g., set to 5 for quick local testing, 10 for production)
-const MAX_MESSAGE_CHAR_LENGTH = 1000; // Character limit guard per message
+const MAX_HISTORY_MESSAGES = 5;
+const MAX_MESSAGE_CHAR_LENGTH = 1000;
 
 export class LiveAIService implements IAIService {
-  /**
-   * Helper method to enforce token/context length constraints by truncating
-   * oversized individual messages and capping history to MAX_HISTORY_MESSAGES.
-   */
   private truncateHistory(
     history: ChatMessage[]
   ): Array<{ role: 'user' | 'assistant'; content: string }> {
@@ -41,27 +36,32 @@ export class LiveAIService implements IAIService {
       throw new Error('GROQ_API_KEY is missing or still set to a placeholder.');
     }
 
-    // 1. Fetch previous conversation history for this student
+    // 1. Fetch user preferences and conversation history
+    const prefs = await AIRepository.getUserPreferences(studentId);
     const rawHistory = await AIRepository.getHistory(
       studentId,
       MAX_HISTORY_MESSAGES
     );
-
-    // 2. Truncate history to stay safely under context token limits
     const formattedHistory = this.truncateHistory(rawHistory);
 
-    // 3. Save current incoming user prompt to DB
+    // 2. Build tailored system prompt based on preferences
+    let dynamicSystemPrompt = SYSTEM_PROMPT;
+    if (prefs) {
+      dynamicSystemPrompt += `\n\nUser Preferences:\n- Preferred Explanation Language: ${prefs.preferred_language || 'English'}\n- Primary Programming Stack: ${prefs.preferred_tech_stack || 'General'}`;
+    }
+
+    // 3. Save current user message
     try {
       await AIRepository.saveMessage(studentId, 'user', prompt);
     } catch (dbErr) {
       console.error('[Database Warning]: Failed to log user prompt:', dbErr);
     }
 
-    // 4. Combine system prompt + few-shot examples + history + current prompt
+    // 4. Construct message payload
     const messages = [
       {
         role: 'system' as const,
-        content: SYSTEM_PROMPT,
+        content: dynamicSystemPrompt,
       },
       ...FEW_SHOT_EXAMPLES.map((ex) => ({
         role: ex.role as 'user' | 'assistant',
@@ -71,7 +71,7 @@ export class LiveAIService implements IAIService {
       { role: 'user' as const, content: prompt },
     ];
 
-    // 5. Call Groq API with full context payload and 25-second client timeout guard
+    // 5. Call Groq API
     const groq = new Groq({
       apiKey,
       timeout: 25000,
@@ -94,7 +94,7 @@ export class LiveAIService implements IAIService {
     reply = reply.trim();
     if (!reply) throw new Error('Groq returned an empty response.');
 
-    // 6. Save model response to DB
+    // 6. Save model response
     try {
       await AIRepository.saveMessage(studentId, 'model', reply);
     } catch (dbErr) {

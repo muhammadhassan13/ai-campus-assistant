@@ -8,6 +8,12 @@ export interface ChatMessage {
   created_at?: Date;
 }
 
+export interface UserPreferences {
+  student_id: number;
+  preferred_language?: string;
+  preferred_tech_stack?: string;
+}
+
 export class AIRepository {
   static async saveMessage(
     student_id: number,
@@ -30,5 +36,31 @@ export class AIRepository {
       [student_id, limit]
     );
     return result.rows;
+  }
+
+  static async getUserPreferences(
+    student_id: number
+  ): Promise<UserPreferences | null> {
+    const result = await pool.query<UserPreferences>(
+      'SELECT * FROM user_preferences WHERE student_id = $1',
+      [student_id]
+    );
+    return result.rows[0] || null;
+  }
+
+  static async saveUserPreferences(
+    student_id: number,
+    preferred_language: string,
+    preferred_tech_stack: string
+  ): Promise<UserPreferences> {
+    const result = await pool.query<UserPreferences>(
+      `INSERT INTO user_preferences (student_id, preferred_language, preferred_tech_stack)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (student_id) 
+       DO UPDATE SET preferred_language = EXCLUDED.preferred_language, preferred_tech_stack = EXCLUDED.preferred_tech_stack
+       RETURNING *`,
+      [student_id, preferred_language, preferred_tech_stack]
+    );
+    return result.rows[0];
   }
 }
