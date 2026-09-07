@@ -1,6 +1,7 @@
 import express from 'express';
 import studentRoutes from './routes/student.routes.js';
 import aiRoutes from './routes/ai.routes.js';
+import documentRoutes from './routes/document.routes.js';
 import { errorHandler } from './middleware/error.middleware.js';
 
 const app = express();
@@ -23,6 +24,7 @@ app.use((req, res, next) => {
 // Mount API routes
 app.use('/api', studentRoutes);
 app.use('/api', aiRoutes);
+app.use('/api/documents', documentRoutes);
 
 // Global Error Middleware
 app.use(errorHandler);
