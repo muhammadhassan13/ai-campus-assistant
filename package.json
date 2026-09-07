@@ -21,6 +21,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.2.0",
     "@types/node": "^26.4.1",
+    "@types/pdf-parse": "^1.1.5",
     "@types/pg": "^8.23.1",
     "@typescript-eslint/eslint-plugin": "^8.68.0",
     "@typescript-eslint/parser": "^8.68.0",
@@ -41,7 +42,9 @@
     "groq-sdk": "^1.6.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.3.0",
+    "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",
+    "pdf-ts": "^0.0.2",
     "pg": "^8.23.0",
     "zod": "^4.5.4"
   }
