@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { pdfToText } from 'pdf-ts';
+import { chunkText } from '../utils/chunking.util.js';
 
 const router = Router();
 
@@ -37,7 +38,10 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
     // 2. Extract full raw text from PDF
     const extractedText = await pdfToText(fileBuffer);
 
-    // 3. Return full text along with file metadata
+    // 3. Generate text chunks (500 character window, 50 character overlap)
+    const chunks = chunkText(extractedText, 500, 50);
+
+    // 4. Return extraction and chunking details
     return res.status(200).json({
       success: true,
       data: {
@@ -46,7 +50,8 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
         path: req.file.path,
         fileSize: req.file.size,
         characterCount: extractedText.length,
-        fullExtractedText: extractedText,
+        totalChunks: chunks.length,
+        chunks,
       },
     });
   } catch (error) {
