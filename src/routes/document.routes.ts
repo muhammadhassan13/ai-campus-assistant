@@ -7,7 +7,6 @@ import { chunkText } from '../utils/chunking.util.js';
 import { generateEmbeddings } from '../utils/embedding.utils.js';
 import { DocumentModel } from '../models/document.model.js';
 import { cosineSimilarity } from '../utils/vector.util.js';
-import type { ScoredChunk } from '../utils/vector.util.js';
 import { generateRagResponse } from '../services/rag.service.js';
 
 const router = Router();
@@ -66,7 +65,7 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
   }
 });
 
-// POST /api/documents/query - Vector similarity search endpoint
+// POST /api/documents/query - Multi-document vector similarity search
 router.post('/query', async (req, res, next) => {
   try {
     const { query, documentId, topK = 3 } = req.body;
@@ -77,30 +76,43 @@ router.post('/query', async (req, res, next) => {
         .json({ success: false, error: 'Query string is required.' });
     }
 
-    // Retrieve document from MongoDB
-    const document = documentId
-      ? await DocumentModel.findById(documentId)
-      : await DocumentModel.findOne().sort({ createdAt: -1 });
+    // Retrieve single specified document OR all documents if documentId is omitted
+    const docs = documentId
+      ? await DocumentModel.find({ _id: documentId })
+      : await DocumentModel.find();
 
-    if (!document) {
+    if (!docs || docs.length === 0) {
       return res
         .status(404)
-        .json({ success: false, error: 'No uploaded document found.' });
+        .json({ success: false, error: 'No uploaded documents found.' });
     }
 
-    // Embed the query text using batch array format
+    // Embed the query text
     const queryEmbeddings = await generateEmbeddings([
       { chunkIndex: 0, text: query, characterCount: query.length },
     ]);
     const queryVector = queryEmbeddings[0].embedding;
 
-    // Calculate similarity score against document chunks
-    const scoredChunks: ScoredChunk[] = document.chunks.map((chunk) => ({
-      chunkIndex: chunk.chunkIndex,
-      text: chunk.text,
-      characterCount: chunk.characterCount,
-      score: cosineSimilarity(queryVector, chunk.embedding),
-    }));
+    // Calculate similarity score across all target document chunks
+    const scoredChunks: Array<{
+      filename: string;
+      chunkIndex: number;
+      text: string;
+      characterCount: number;
+      score: number;
+    }> = [];
+
+    for (const doc of docs) {
+      for (const chunk of doc.chunks) {
+        scoredChunks.push({
+          filename: doc.originalName,
+          chunkIndex: chunk.chunkIndex,
+          text: chunk.text,
+          characterCount: chunk.characterCount,
+          score: cosineSimilarity(queryVector, chunk.embedding),
+        });
+      }
+    }
 
     // Rank chunks by similarity score
     scoredChunks.sort((a, b) => b.score - a.score);
@@ -110,7 +122,6 @@ router.post('/query', async (req, res, next) => {
       success: true,
       data: {
         query,
-        documentId: document._id,
         matchedChunks: topResults,
       },
     });
@@ -119,7 +130,7 @@ router.post('/query', async (req, res, next) => {
   }
 });
 
-// POST /api/documents/chat - RAG endpoint using Groq with source citations
+// POST /api/documents/chat - RAG endpoint using Groq with multi-doc citations
 router.post('/chat', async (req, res, next) => {
   try {
     const { query, documentId, topK } = req.body;

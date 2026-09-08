@@ -4,14 +4,14 @@ import { generateEmbeddings } from '../utils/embedding.utils.js';
 import { cosineSimilarity } from '../utils/vector.util.js';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-const SIMILARITY_THRESHOLD = 0.2; // Minimum required similarity score
+const SIMILARITY_THRESHOLD = 0.2;
 
 export async function generateRagResponse(
   query: string,
   documentId?: string,
   topK = 3
 ) {
-  // 1. Fetch document(s)
+  // 1. Retrieve specific document OR all documents if documentId is omitted
   const docs = documentId
     ? await DocumentModel.find({ _id: documentId })
     : await DocumentModel.find();
@@ -23,13 +23,13 @@ export async function generateRagResponse(
     };
   }
 
-  // 2. Embed user query
+  // 2. Generate embedding for query text
   const queryEmbeddings = await generateEmbeddings([
     { chunkIndex: 0, text: query, characterCount: query.length },
   ]);
   const queryVector = queryEmbeddings[0].embedding;
 
-  // 3. Compute cosine similarity scores across document chunks
+  // 3. Compute cosine similarity scores across ALL chunks from ALL target documents
   const scoredChunks: Array<{
     filename: string;
     chunkIndex: number;
@@ -49,11 +49,11 @@ export async function generateRagResponse(
     }
   }
 
-  // 4. Rank chunks by similarity score
+  // 4. Rank chunks by similarity score across all files
   scoredChunks.sort((a, b) => b.score - a.score);
   const topChunks = scoredChunks.slice(0, topK);
 
-  // 5. Fallback Check: If top score is below threshold, return non-invention message
+  // 5. Check relevance threshold (Task 7.4 Item 7)
   if (topChunks.length === 0 || topChunks[0].score < SIMILARITY_THRESHOLD) {
     return {
       answer:
@@ -62,14 +62,14 @@ export async function generateRagResponse(
     };
   }
 
-  // 6. Construct prompt with relevant context chunks
+  // 6. Construct prompt with multi-document context block
   const contextText = topChunks
     .map((c) => `[Source: ${c.filename}, Chunk ${c.chunkIndex}]\n${c.text}`)
     .join('\n\n');
 
-  const systemPrompt = `You are an AI campus assistant. Answer the user's question accurately using ONLY the provided context. You must explicitly cite the source document name and chunk number (e.g., [Source: filename.pdf, Chunk X]) whenever referencing facts. If the provided context does not contain enough information or is irrelevant, explicitly state that you do not know based on the provided documents. Do NOT make up information.`;
+  const systemPrompt = `You are an AI campus assistant. Answer the user's question accurately using ONLY the provided context. You must explicitly cite the source document name and chunk number (e.g., [Source: filename.pdf, Chunk X]) whenever referencing facts. If the context does not contain enough information, state that clearly. Do NOT make up information.`;
 
-  // 7. Call Groq API
+  // 7. Request Groq chat completion
   const completion = await groq.chat.completions.create({
     model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
     messages: [
