@@ -6,8 +6,9 @@ import { pdfToText } from 'pdf-ts';
 import { chunkText } from '../utils/chunking.util.js';
 import { generateEmbeddings } from '../utils/embedding.utils.js';
 import { DocumentModel } from '../models/document.model.js';
-import { cosineSimilarity } from '../utils/vectorSearch.util.js';
-import type { ScoredChunk } from '../utils/vectorSearch.util.js';
+import { cosineSimilarity } from '../utils/vector.util.js';
+import type { ScoredChunk } from '../utils/vector.util.js';
+import { generateRagResponse } from '../services/rag.service.js';
 
 const router = Router();
 
@@ -87,7 +88,7 @@ router.post('/query', async (req, res, next) => {
         .json({ success: false, error: 'No uploaded document found.' });
     }
 
-    // Embed the query text
+    // Embed the query text using batch array format
     const queryEmbeddings = await generateEmbeddings([
       { chunkIndex: 0, text: query, characterCount: query.length },
     ]);
@@ -112,6 +113,27 @@ router.post('/query', async (req, res, next) => {
         documentId: document._id,
         matchedChunks: topResults,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/documents/chat - RAG endpoint using Groq with source citations
+router.post('/chat', async (req, res, next) => {
+  try {
+    const { query, documentId, topK } = req.body;
+
+    if (!query || typeof query !== 'string') {
+      return res
+        .status(400)
+        .json({ success: false, error: 'Query string is required.' });
+    }
+
+    const result = await generateRagResponse(query, documentId, topK || 3);
+    return res.status(200).json({
+      success: true,
+      data: result,
     });
   } catch (error) {
     next(error);
