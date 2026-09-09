@@ -3,6 +3,7 @@ import studentRoutes from './routes/student.routes.js';
 import aiRoutes from './routes/ai.routes.js';
 import documentRoutes from './routes/document.routes.js';
 import { errorHandler } from './middleware/error.middleware.js';
+import voiceRoutes from './routes/voice.routes.js';
 
 const app = express();
 
@@ -28,5 +29,7 @@ app.use('/api/documents', documentRoutes);
 
 // Global Error Middleware
 app.use(errorHandler);
+
+app.use('/api/voice', voiceRoutes);
 
 export default app;
