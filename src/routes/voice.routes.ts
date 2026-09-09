@@ -3,16 +3,15 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { transcribeAudio } from '../services/voice.service.js';
+import { generateRagResponse } from '../services/rag.service.js';
 
 const router = Router();
 
-// Ensure uploads/audio directory exists (Item 1)
 const audioUploadDir = path.join(process.cwd(), 'uploads/audio');
 if (!fs.existsSync(audioUploadDir)) {
   fs.mkdirSync(audioUploadDir, { recursive: true });
 }
 
-// Multer storage configuration
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, audioUploadDir),
   filename: (req, file, cb) => {
@@ -25,35 +24,72 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 /**
- * POST /api/voice/process
- * Combines Item 1 (Upload & Save) and Item 2 (Groq Whisper STT Transcription)
+ * REQUEST 1: Independent Audio Upload & STT Transcription
+ * POST /api/voice/transcribe
  */
-router.post('/process', upload.single('audio'), async (req, res, next) => {
+router.post('/transcribe', upload.single('audio'), async (req, res, next) => {
   try {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        error:
-          'No audio file provided. Please send a file using the "audio" key.',
+        error: 'No audio file provided. Use form field "audio".',
       });
     }
 
-    // Item 2: Perform STT transcription on saved file
+    // Transcribe audio using Groq Whisper API
     const transcript = await transcribeAudio(req.file.path);
 
-    // Return both upload metadata (Item 1) and speech transcript (Item 2)
     return res.status(200).json({
       success: true,
-      message: 'Audio received and transcribed successfully.',
+      message: 'Audio uploaded and transcribed successfully.',
       data: {
         fileInfo: {
           filename: req.file.filename,
           originalName: req.file.originalname,
-          mimetype: req.file.mimetype,
           sizeBytes: req.file.size,
           savedPath: req.file.path,
         },
         transcript,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * REQUEST 2: Spoken Document Question -> STT -> RAG Answer
+ * POST /api/voice/rag-chat
+ */
+router.post('/rag-chat', upload.single('audio'), async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No audio file provided. Use form field "audio".',
+      });
+    }
+
+    // 1. Transcribe spoken question
+    const transcript = await transcribeAudio(req.file.path);
+
+    // 2. Route transcript through RAG pipeline
+    const documentId = req.body.documentId;
+    const topK = req.body.topK ? parseInt(req.body.topK, 10) : 3;
+
+    const ragResult = await generateRagResponse(transcript, documentId, topK);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Spoken question processed via RAG pipeline successfully.',
+      data: {
+        fileInfo: {
+          filename: req.file.filename,
+          savedPath: req.file.path,
+        },
+        transcript,
+        answer: ragResult.answer,
+        sources: ragResult.sources,
       },
     });
   } catch (error) {
