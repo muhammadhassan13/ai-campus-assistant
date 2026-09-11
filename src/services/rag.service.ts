@@ -8,13 +8,18 @@ const SIMILARITY_THRESHOLD = 0.2;
 
 export async function generateRagResponse(
   query: string,
-  documentId?: string,
+  documentId?: string | string[],
   topK = 3
 ) {
-  // 1. Retrieve specific document OR all documents if documentId is omitted
-  const docs = documentId
-    ? await DocumentModel.find({ _id: documentId })
-    : await DocumentModel.find();
+  // 1. Retrieve specific document(s) OR all documents if documentId is omitted
+  let docs;
+  if (Array.isArray(documentId) && documentId.length > 0) {
+    docs = await DocumentModel.find({ _id: { $in: documentId } });
+  } else if (typeof documentId === 'string' && documentId.trim() !== '') {
+    docs = await DocumentModel.find({ _id: documentId });
+  } else {
+    docs = await DocumentModel.find();
+  }
 
   if (!docs || docs.length === 0) {
     return {
@@ -39,7 +44,8 @@ export async function generateRagResponse(
 
   for (const doc of docs) {
     for (const chunk of doc.chunks) {
-      const score = cosineSimilarity(queryVector, chunk.embedding);
+      // Fallback to empty array to satisfy TypeScript type requirements for chunk.embedding
+      const score = cosineSimilarity(queryVector, chunk.embedding || []);
       scoredChunks.push({
         filename: doc.originalName,
         chunkIndex: chunk.chunkIndex,
@@ -53,7 +59,7 @@ export async function generateRagResponse(
   scoredChunks.sort((a, b) => b.score - a.score);
   const topChunks = scoredChunks.slice(0, topK);
 
-  // 5. Check relevance threshold (Task 7.4 Item 7)
+  // 5. Check relevance threshold
   if (topChunks.length === 0 || topChunks[0].score < SIMILARITY_THRESHOLD) {
     return {
       answer:
@@ -62,12 +68,17 @@ export async function generateRagResponse(
     };
   }
 
-  // 6. Construct prompt with multi-document context block
+  // 6. Construct prompt with multi-document context block and markdown table prevention rules
   const contextText = topChunks
     .map((c) => `[Source: ${c.filename}, Chunk ${c.chunkIndex}]\n${c.text}`)
     .join('\n\n');
 
-  const systemPrompt = `You are an AI campus assistant. Answer the user's question accurately using ONLY the provided context. You must explicitly cite the source document name and chunk number (e.g., [Source: filename.pdf, Chunk X]) whenever referencing facts. If the context does not contain enough information, state that clearly. Do NOT make up information.`;
+  const systemPrompt = `You are an AI campus assistant. Answer the user's question accurately using ONLY the provided context. You must explicitly cite the source document name and chunk number (e.g., [Source: filename.pdf, Chunk X]) whenever referencing facts.
+
+Formatting Rules:
+- NEVER use markdown tables (pipes | and dashes -) under any circumstances.
+- If presenting comparative information or multiple attributes, use structured lists with bold category titles and bullet points instead.
+- If the context does not contain enough information, state that clearly. Do NOT make up information.`;
 
   // 7. Request Groq chat completion
   const completion = await groq.chat.completions.create({

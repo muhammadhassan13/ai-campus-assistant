@@ -55,10 +55,8 @@ export class AIRepository {
   ): Promise<UserPreferences> {
     const result = await pool.query<UserPreferences>(
       `INSERT INTO user_preferences (student_id, preferred_language, preferred_tech_stack)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (student_id) 
-       DO UPDATE SET preferred_language = EXCLUDED.preferred_language, preferred_tech_stack = EXCLUDED.preferred_tech_stack
-       RETURNING *`,
+      VALUES ($1, $2, $3) ON CONFLICT (student_id)
+      DO UPDATE SET preferred_language = EXCLUDED.preferred_language, preferred_tech_stack = EXCLUDED.preferred_tech_stack RETURNING *`,
       [student_id, preferred_language, preferred_tech_stack]
     );
     return result.rows[0];

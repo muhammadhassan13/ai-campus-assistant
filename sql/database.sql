@@ -71,9 +71,18 @@ CREATE TABLE query_log (
 );
 
 CREATE TABLE IF NOT EXISTS conversation (
-    conversation_id SERIAL PRIMARY KEY,
+    message_id SERIAL PRIMARY KEY,
+    session_id INT NOT NULL,
     student_id INT REFERENCES student(student_id) ON DELETE CASCADE,
     role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'model')),
+    message TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE document_conversation (
+    conversation_id SERIAL PRIMARY KEY,
+    student_id INT NOT NULL,
+    role VARCHAR(10) CHECK (role IN ('user', 'model')) NOT NULL,
     message TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
