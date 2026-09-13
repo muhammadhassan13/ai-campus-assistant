@@ -16,6 +16,11 @@ interface ChunkInfo {
   text: string;
   characterCount: number;
   vectorDimensions: number;
+  // Spatial bounding box coordinates (percentages 0-100 relative to document canvas/page)
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
 }
 
 interface UploadedDoc {
@@ -42,6 +47,217 @@ interface ChatMessage {
   estimatedDurationSec?: number;
 }
 
+// Visual Document vs Extracted Continuous Text Inspector Subcomponent with Bidirectional Highlighting
+const VisualTextInspector: React.FC<{
+  documents: UploadedDoc[];
+  token: string;
+}> = ({ documents }) => {
+  const [selectedDocId, setSelectedDocId] = useState<string>('');
+  const [hoveredChunkIndex, setHoveredChunkIndex] = useState<number | null>(
+    null
+  );
+
+  const currentDoc = documents.find((d) => d.documentId === selectedDocId);
+  const ingestedDocs = documents.filter((d) => d.totalChunks > 0);
+
+  return (
+    <div style={styles.uploadCard}>
+      <h3 style={styles.cardSectionTitle}>
+        Visual Document vs. Extracted Continuous Text Inspector
+      </h3>
+      <p style={styles.pageDesc}>
+        Select an ingested document to inspect its original layout side-by-side
+        with its fully extracted continuous text. Hover over text on either side
+        to synchronize and trace the highlighted block.
+      </p>
+
+      <div style={{ marginTop: '8px', marginBottom: '12px' }}>
+        <select
+          value={selectedDocId}
+          onChange={(e) => setSelectedDocId(e.target.value)}
+          style={{ ...styles.input, width: '100%', maxWidth: '420px' }}
+        >
+          <option value="">-- Select an Ingested Document --</option>
+          {ingestedDocs.map((doc) => (
+            <option key={doc.documentId} value={doc.documentId}>
+              {doc.originalName} ({doc.totalChunks} chunks)
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {currentDoc ? (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '16px',
+            height: '560px',
+          }}
+        >
+          {/* Left: Original Document Visual View with Bounding Box Overlays */}
+          <div
+            style={{
+              backgroundColor: '#0F172A',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={styles.mongoServerHeader}>
+              <span>Original Document View ({currentDoc.originalName})</span>
+              {hoveredChunkIndex !== null && (
+                <span style={{ color: '#34D399' }}>
+                  Highlighting Source Block #{hoveredChunkIndex}
+                </span>
+              )}
+            </div>
+            <div
+              style={{
+                flex: 1,
+                position: 'relative',
+                overflow: 'hidden',
+                backgroundColor: '#1E293B',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <iframe
+                src={`/uploads/${currentDoc.filename}`}
+                title={currentDoc.originalName}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                  background: '#FFFFFF',
+                }}
+              />
+              {/* Interactive Bounding Box Overlay Layer */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  pointerEvents: 'none',
+                }}
+              >
+                {currentDoc.chunks.map((chunk) => {
+                  const isHovered = hoveredChunkIndex === chunk.chunkIndex;
+                  // Fallback fallback coordinates if backend coordinates aren't explicitly provided
+                  const boxStyle: React.CSSProperties = {
+                    position: 'absolute',
+                    left: `${chunk.x ?? 5}%`,
+                    top: `${chunk.y ?? chunk.chunkIndex * 12 + 5}%`,
+                    width: `${chunk.width ?? 90}%`,
+                    height: `${chunk.height ?? 10}%`,
+                    backgroundColor: isHovered
+                      ? 'rgba(52, 211, 153, 0.35)'
+                      : 'transparent',
+                    border: isHovered
+                      ? '2px solid #34D399'
+                      : '1px dashed rgba(99, 102, 241, 0.2)',
+                    borderRadius: '4px',
+                    pointerEvents: 'auto',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  };
+                  return (
+                    <div
+                      key={`overlay-${chunk.chunkIndex}`}
+                      style={boxStyle}
+                      onMouseEnter={() =>
+                        setHoveredChunkIndex(chunk.chunkIndex)
+                      }
+                      onMouseLeave={() => setHoveredChunkIndex(null)}
+                      title={`Chunk #${chunk.chunkIndex}`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Extracted Continuous Text */}
+          <div
+            style={{
+              backgroundColor: '#0F172A',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={styles.mongoServerHeader}>
+              <span>Fully Extracted Continuous Text</span>
+              <span style={{ color: '#818CF8' }}>
+                {currentDoc.characterCount} total characters
+              </span>
+            </div>
+            <div
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '16px',
+                fontSize: '13px',
+                lineHeight: '1.7',
+                color: '#CBD5E1',
+              }}
+            >
+              {currentDoc.chunks.map((chunk) => {
+                const isHovered = hoveredChunkIndex === chunk.chunkIndex;
+                return (
+                  <span
+                    key={chunk.chunkIndex}
+                    onMouseEnter={() => setHoveredChunkIndex(chunk.chunkIndex)}
+                    onMouseLeave={() => setHoveredChunkIndex(null)}
+                    style={{
+                      backgroundColor: isHovered
+                        ? 'rgba(99, 102, 241, 0.25)'
+                        : 'transparent',
+                      outline: isHovered ? '1px solid #6366F1' : 'none',
+                      borderRadius: '4px',
+                      padding: '2px 4px',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.15s ease',
+                      display: 'inline',
+                    }}
+                    title={`Extracted from Chunk #${chunk.chunkIndex}`}
+                  >
+                    {chunk.text}{' '}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div
+          style={{
+            ...styles.emptyStateBox,
+            height: '300px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <p style={styles.emptyFilesText}>
+            {ingestedDocs.length === 0
+              ? 'No ingested documents available. Please upload a PDF and ingest vectors in the Documents tab first.'
+              : 'Please select an ingested document above to view its visual comparison and continuous extracted text.'}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function App() {
   const [token, setToken] = useState<string>(
     localStorage.getItem('jwt_token') || ''
@@ -49,8 +265,8 @@ export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // Navigation: 1 = Documents Hub, 2 = General AI Chat, 3 = Document RAG Chat & Voice
-  const [activeNavPage, setActiveNavPage] = useState<1 | 2 | 3>(1);
+  // Navigation: 1 = Documents Hub, 2 = General AI Chat, 3 = Document RAG Chat & Voice, 4 = Inspector
+  const [activeNavPage, setActiveNavPage] = useState<1 | 2 | 3 | 4>(1);
 
   // Document Management States
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -94,11 +310,11 @@ export default function App() {
   useEffect(() => {
     const canvas = document.getElementById('spaceCanvas') as HTMLCanvasElement;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d')!;
     if (!ctx) return;
 
     let width: number, height: number;
-    let stars: Star[] = [];
+    const stars: Star[] = [];
     const numStars = 600;
     const speed = 2.5;
 
@@ -191,6 +407,18 @@ export default function App() {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
+  const cleanMarkdownForSpeech = (text: string) => {
+    return text
+      .replace(/```[\s\S]*?```/g, ' code block omitted ')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/(\*\*|__)(.*?)\1/g, '$2')
+      .replace(/(\*|_)(.*?)\1/g, '$2')
+      .replace(/#{1,6}\s+/g, '')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/>\s+/g, '')
+      .replace(/[-*+]\s+/g, '');
+  };
+
   const stopCurrentSpeech = (resetState = true) => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
@@ -265,7 +493,8 @@ export default function App() {
       progressIntervalRef.current = null;
     }
 
-    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    const cleanText = cleanMarkdownForSpeech(textToSpeak);
+    const utterance = new SpeechSynthesisUtterance(cleanText);
     const britishVoice = getBritishFemaleVoice();
     if (britishVoice) {
       utterance.voice = britishVoice;
@@ -371,7 +600,6 @@ export default function App() {
       msg.estimatedDurationSec || Math.max(2, (totalWords / 140) * 60);
     const currentPos = msg.currentPositionSec || 0;
 
-    // 1. If currently playing this exact message -> Pause
     if (activeMessageIdRef.current === msg.id && msg.isPlaying) {
       window.speechSynthesis.pause();
       if (progressIntervalRef.current) {
@@ -388,18 +616,12 @@ export default function App() {
       return;
     }
 
-    // 2. If currently paused on this exact message -> Resume
     if (activeMessageIdRef.current === msg.id && msg.isPaused) {
       if (window.speechSynthesis.paused) {
         window.speechSynthesis.resume();
       } else {
-        const ratio = Math.max(0, Math.min(1, currentPos / estimatedDuration));
-        let startWordIdx = Math.floor(ratio * totalWords);
-        startWordIdx = Math.max(0, Math.min(startWordIdx, totalWords - 1));
-        if (ratio >= 0.98) startWordIdx = 0;
-        const sliced = words.slice(startWordIdx).join(' ');
         playSpeechSegment(
-          sliced,
+          msg.text,
           msg.id,
           currentPos,
           estimatedDuration,
@@ -408,8 +630,8 @@ export default function App() {
         return;
       }
 
-      let elapsedTime = currentPos;
       positionTimerRef.current = currentPos;
+      let elapsedTime = currentPos;
       progressIntervalRef.current = window.setInterval(() => {
         elapsedTime += 0.2;
         const progressPercent = Math.min(
@@ -442,22 +664,11 @@ export default function App() {
       return;
     }
 
-    // 3. Fresh play or replay
     stopCurrentSpeech(false);
-    let startWordIdx = 0;
-    let actualStartSec = 0;
-    if (currentPos > 0 && currentPos < estimatedDuration - 0.5) {
-      const ratio = currentPos / estimatedDuration;
-      startWordIdx = Math.floor(ratio * totalWords);
-      startWordIdx = Math.max(0, Math.min(startWordIdx, totalWords - 1));
-      actualStartSec = currentPos;
-    }
-
-    const sliced = words.slice(startWordIdx).join(' ');
     playSpeechSegment(
-      sliced,
+      msg.text,
       msg.id,
-      actualStartSec,
+      currentPos > 0 && currentPos < estimatedDuration - 0.5 ? currentPos : 0,
       estimatedDuration,
       setLogFn
     );
@@ -489,14 +700,8 @@ export default function App() {
       )
     );
 
-    const words = msg.text.split(/\s+/);
-    const totalWords = words.length;
-    let startWordIdx = Math.floor(clickedRatio * totalWords);
-    startWordIdx = Math.max(0, Math.min(startWordIdx, totalWords - 1));
-    const sliced = words.slice(startWordIdx).join(' ');
-
     playSpeechSegment(
-      sliced,
+      msg.text,
       msg.id,
       newPositionSec,
       estimatedDuration,
@@ -875,7 +1080,6 @@ export default function App() {
     <div style={styles.pageBackground}>
       <canvas id="spaceCanvas" style={styles.canvasBackground}></canvas>
       <style>{`
-        /* Minimalist custom scrollbar: completely uncropped, zero stepper arrows */
         ::-webkit-scrollbar {
           width: 5px;
           height: 5px;
@@ -892,10 +1096,7 @@ export default function App() {
         ::-webkit-scrollbar-thumb:hover {
           background: rgba(148, 163, 184, 0.5);
         }
-        ::-webkit-scrollbar-button,
-        ::-webkit-scrollbar-button:single-button,
-        ::-webkit-scrollbar-button:start,
-        ::-webkit-scrollbar-button:end {
+        ::-webkit-scrollbar-button {
           display: none !important;
           width: 0px;
           height: 0px;
@@ -913,7 +1114,7 @@ export default function App() {
             <div style={styles.brandLogo}>✨</div>
             <div>
               <h1 style={styles.title}>Campus.AI</h1>
-              <p style={styles.subtitle}>Workspace v2.2</p>
+              <p style={styles.subtitle}>Workspace v2.3</p>
             </div>
           </div>
           {token && (
@@ -947,6 +1148,16 @@ export default function App() {
                 onClick={() => setActiveNavPage(3)}
               >
                 RAG & Voice Chat
+              </button>
+              <button
+                style={
+                  activeNavPage === 4
+                    ? styles.activeNavBtn
+                    : styles.inactiveNavBtn
+                }
+                onClick={() => setActiveNavPage(4)}
+              >
+                Visual Inspector
               </button>
             </nav>
           )}
@@ -1031,7 +1242,7 @@ export default function App() {
                           onChange={(e) =>
                             setSelectedFile(e.target.files?.[0] || null)
                           }
-                          disabled={alongsideUploadLoading(uploadingDoc)}
+                          disabled={uploadingDoc}
                           style={{ display: 'none' }}
                         />
                       </label>
@@ -1608,16 +1819,25 @@ export default function App() {
                   )}
                 </div>
               )}
+
+              {activeNavPage === 4 && (
+                <div style={styles.pageSection}>
+                  <div style={styles.sectionHeadingRow}>
+                    <h2 style={styles.pageTitle}>Visual Document Inspector</h2>
+                    <p style={styles.pageDesc}>
+                      Examine original document layouts side-by-side with fully
+                      extracted continuous text.
+                    </p>
+                  </div>
+                  <VisualTextInspector documents={docList} token={token} />
+                </div>
+              )}
             </div>
           )}
         </main>
       </div>
     </div>
   );
-}
-
-function alongsideUploadLoading(val: boolean) {
-  return val;
 }
 
 const styles: Record<string, React.CSSProperties> = {

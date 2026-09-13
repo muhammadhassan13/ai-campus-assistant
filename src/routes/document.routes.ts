@@ -16,7 +16,6 @@ import {
 
 const router = Router();
 
-// Protect all document routes
 router.use(authenticateToken);
 
 const uploadDir = path.join(process.cwd(), 'uploads');
@@ -34,7 +33,71 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-// GET /api/documents - Retrieve all stored documents with comprehensive chunk/metadata info
+function parseAndStructureDocument(rawText: string): string {
+  const lines = rawText.split('\n');
+  const processedLines: string[] = [];
+  let inTable = false;
+  let tableRows: string[][] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    const columns = line.split(/\s{3,}|\t/).filter(Boolean);
+
+    if (columns.length >= 2) {
+      inTable = true;
+      tableRows.push(columns);
+    } else {
+      if (inTable && tableRows.length > 0) {
+        processedLines.push(formatTableToMarkdown(tableRows));
+        tableRows = [];
+        inTable = false;
+      }
+      processedLines.push(line);
+    }
+  }
+  if (tableRows.length > 0) {
+    processedLines.push(formatTableToMarkdown(tableRows));
+  }
+
+  let formattedText = processedLines.join('\n');
+
+  const sectionKeywords = [
+    'EDUCATION',
+    'SKILLS',
+    'EXPERIENCE',
+    'PROJECTS',
+    'CERTIFICATIONS',
+    'SUMMARY',
+    'PROFILE',
+    'WORK HISTORY',
+    'TECHNICAL SKILLS',
+  ];
+
+  sectionKeywords.forEach((keyword) => {
+    const regex = new RegExp(`^(${keyword})[:]?$`, 'gim');
+    formattedText = formattedText.replace(regex, `\n\n## $1\n`);
+  });
+
+  const paragraphBlocks = formattedText.split('\n\n');
+  if (paragraphBlocks.length > 0 && !paragraphBlocks[0].startsWith('#')) {
+    paragraphBlocks[0] = `# ${paragraphBlocks[0]}`;
+  }
+
+  return paragraphBlocks.join('\n\n');
+}
+
+function formatTableToMarkdown(rows: string[][]): string {
+  if (rows.length === 0) return '';
+  let md = '\n';
+  const header = rows[0];
+  md += `| ${header.join(' | ')} |\n`;
+  md += `| ${header.map(() => '---').join(' | ')} |\n`;
+  for (let i = 1; i < rows.length; i++) {
+    md += `| ${rows[i].join(' | ')} |\n`;
+  }
+  return md + '\n';
+}
+
 router.get('/', async (req: AuthenticatedRequest, res, next) => {
   try {
     const docs = await DocumentModel.find();
@@ -45,6 +108,7 @@ router.get('/', async (req: AuthenticatedRequest, res, next) => {
       fileSize: doc.fileSize,
       characterCount: doc.characterCount,
       totalChunks: doc.totalChunks,
+      fullText: doc.fullText || '',
       chunks: doc.chunks.map((c) => ({
         chunkIndex: c.chunkIndex,
         text: c.text,
@@ -55,16 +119,12 @@ router.get('/', async (req: AuthenticatedRequest, res, next) => {
       updatedAt: doc.updatedAt,
     }));
 
-    return res.status(200).json({
-      success: true,
-      data: formattedDocs,
-    });
+    return res.status(200).json({ success: true, data: formattedDocs });
   } catch (error) {
     next(error);
   }
 });
 
-// POST /api/documents/upload - Upload file to disk and save unchunked record
 router.post(
   '/upload',
   upload.single('file'),
@@ -76,12 +136,18 @@ router.post(
           .json({ success: false, error: 'No file uploaded.' });
       }
 
+      const filePath = path.join(uploadDir, req.file.filename);
+      const fileBuffer = fs.readFileSync(filePath);
+      const rawText = await pdfToText(fileBuffer);
+      const structuredText = parseAndStructureDocument(rawText);
+
       const savedDoc = await DocumentModel.create({
         filename: req.file.filename,
         originalName: req.file.originalname,
         fileSize: req.file.size,
-        characterCount: 0,
+        characterCount: structuredText.length,
         totalChunks: 0,
+        fullText: structuredText,
         chunks: [],
       });
 
@@ -92,8 +158,9 @@ router.post(
           filename: savedDoc.filename,
           originalName: savedDoc.originalName,
           fileSize: savedDoc.fileSize,
-          characterCount: 0,
+          characterCount: savedDoc.characterCount,
           totalChunks: 0,
+          fullText: savedDoc.fullText,
           chunks: [],
         },
       });
@@ -103,7 +170,6 @@ router.post(
   }
 );
 
-// POST /api/documents/:id/chunk - Explicitly chunk and vectorize a staged document
 router.post('/:id/chunk', async (req: AuthenticatedRequest, res, next) => {
   try {
     const { id } = req.params;
@@ -130,12 +196,14 @@ router.post('/:id/chunk', async (req: AuthenticatedRequest, res, next) => {
     }
 
     const fileBuffer = fs.readFileSync(filePath);
-    const extractedText = await pdfToText(fileBuffer);
+    const rawText = await pdfToText(fileBuffer);
+    const extractedText = doc.fullText || parseAndStructureDocument(rawText);
     const chunks = chunkText(extractedText, 500, 50);
     const embeddedChunks = await generateEmbeddings(chunks);
 
     doc.characterCount = extractedText.length;
     doc.totalChunks = embeddedChunks.length;
+    doc.fullText = extractedText;
     doc.chunks = embeddedChunks;
     await doc.save();
 
@@ -146,6 +214,7 @@ router.post('/:id/chunk', async (req: AuthenticatedRequest, res, next) => {
         originalName: doc.originalName,
         characterCount: doc.characterCount,
         totalChunks: doc.totalChunks,
+        fullText: doc.fullText,
         chunks: doc.chunks.map((c) => ({
           chunkIndex: c.chunkIndex,
           text: c.text,
@@ -159,7 +228,6 @@ router.post('/:id/chunk', async (req: AuthenticatedRequest, res, next) => {
   }
 });
 
-// POST /api/documents/:id/unchunk - Remove chunks and embeddings from a document
 router.post('/:id/unchunk', async (req: AuthenticatedRequest, res, next) => {
   try {
     const { id } = req.params;
@@ -171,13 +239,6 @@ router.post('/:id/unchunk', async (req: AuthenticatedRequest, res, next) => {
         .json({ success: false, error: 'Document not found.' });
     }
 
-    if (!doc.chunks || doc.chunks.length === 0) {
-      return res
-        .status(400)
-        .json({ success: false, error: 'Document is already unchunked.' });
-    }
-
-    doc.characterCount = 0;
     doc.totalChunks = 0;
     doc.chunks = [];
     await doc.save();
@@ -187,8 +248,9 @@ router.post('/:id/unchunk', async (req: AuthenticatedRequest, res, next) => {
       data: {
         documentId: doc._id,
         originalName: doc.originalName,
-        characterCount: 0,
+        characterCount: doc.characterCount,
         totalChunks: 0,
+        fullText: doc.fullText,
         chunks: [],
       },
     });
@@ -197,7 +259,6 @@ router.post('/:id/unchunk', async (req: AuthenticatedRequest, res, next) => {
   }
 });
 
-// DELETE /api/documents/:id - Delete document from disk and MongoDB
 router.delete('/:id', async (req: AuthenticatedRequest, res, next) => {
   try {
     const { id } = req.params;
@@ -227,7 +288,6 @@ router.delete('/:id', async (req: AuthenticatedRequest, res, next) => {
   }
 });
 
-// POST /api/documents/query - Multi-document vector similarity search
 router.post('/query', async (req: AuthenticatedRequest, res, next) => {
   try {
     const { query, documentId, topK = 3 } = req.body;
@@ -278,17 +338,13 @@ router.post('/query', async (req: AuthenticatedRequest, res, next) => {
 
     return res.status(200).json({
       success: true,
-      data: {
-        query,
-        matchedChunks: topResults,
-      },
+      data: { query, matchedChunks: topResults },
     });
   } catch (error) {
     next(error);
   }
 });
 
-// POST /api/documents/chat - RAG endpoint using Groq with multi-doc citations and PostgreSQL history logging
 router.post('/chat', async (req: AuthenticatedRequest, res, next) => {
   try {
     const studentId = req.user?.student_id;
@@ -316,22 +372,59 @@ router.post('/chat', async (req: AuthenticatedRequest, res, next) => {
       targetDocs = undefined;
     }
 
-    // 1. Save user prompt to PostgreSQL document conversation history table
     await RagRepository.saveMessage(studentId, 'user', query.trim());
 
-    // 2. Generate RAG response via service
     const result = await generateRagResponse(query, targetDocs, topK || 3);
     const responseText =
       typeof result === 'string'
         ? result
         : result.answer || JSON.stringify(result);
 
-    // 3. Save model reply to PostgreSQL document conversation history table
     await RagRepository.saveMessage(studentId, 'model', responseText);
+
+    return res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Added /compare route for multi-document comparisons
+router.post('/compare', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { documentIdA, documentIdB } = req.body;
+
+    if (!documentIdA || !documentIdB) {
+      return res.status(400).json({
+        success: false,
+        error: 'Both documentIdA and documentIdB are required.',
+      });
+    }
+
+    const docA = await DocumentModel.findById(documentIdA);
+    const docB = await DocumentModel.findById(documentIdB);
+
+    if (!docA || !docB) {
+      return res.status(404).json({
+        success: false,
+        error: 'One or both documents could not be found.',
+      });
+    }
+
+    const comparisonQuery = `Compare the following two documents thoroughly:\n\nDocument 1 (${docA.originalName}):\n${docA.fullText}\n\nDocument 2 (${docB.originalName}):\n${docB.fullText}\n\nProvide key similarities, differences, and a structured breakdown.`;
+
+    const result = await generateRagResponse(
+      comparisonQuery,
+      [documentIdA, documentIdB],
+      5
+    );
+    const responseText =
+      typeof result === 'string'
+        ? result
+        : result.answer || JSON.stringify(result);
 
     return res.status(200).json({
       success: true,
-      data: result,
+      data: { comparison: responseText },
     });
   } catch (error) {
     next(error);

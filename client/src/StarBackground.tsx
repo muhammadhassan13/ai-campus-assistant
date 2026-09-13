@@ -12,7 +12,7 @@ export default function StarBackground({
     if (!ctx) return;
 
     let width: number, height: number;
-    let stars: Star[] = [];
+    const stars: Star[] = [];
     const numStars = 600;
     const speed = 2.5;
 
@@ -48,7 +48,7 @@ export default function StarBackground({
         }
       }
 
-      draw() {
+      draw(context: CanvasRenderingContext2D) {
         const k = 300 / this.z;
         const px = this.x * k + width / 2;
         const py = this.y * k + height / 2;
@@ -57,10 +57,10 @@ export default function StarBackground({
           const pSize = Math.max(1, (1 - this.z / width) * 3.5);
           const opacity = Math.min(1, (1 - this.z / width) * 1.5);
 
-          ctx.fillStyle = `rgba(130, 190, 255, ${opacity})`;
-          ctx.beginPath();
-          ctx.arc(px, py, pSize, 0, Math.PI * 2);
-          ctx.fill();
+          context.fillStyle = `rgba(130, 190, 255, ${opacity})`;
+          context.beginPath();
+          context.arc(px, py, pSize, 0, Math.PI * 2);
+          context.fill();
         }
       }
     }
@@ -70,13 +70,14 @@ export default function StarBackground({
     }
 
     let animationFrameId: number;
+    const context = ctx; // TypeScript narrows this successfully
     function animate() {
-      ctx.fillStyle = 'rgba(5, 10, 25, 0.35)';
-      ctx.fillRect(0, 0, width, height);
+      context.fillStyle = 'rgba(5, 10, 25, 0.35)';
+      context.fillRect(0, 0, width, height);
 
       stars.forEach((star) => {
         star.update();
-        star.draw();
+        star.draw(context);
       });
 
       animationFrameId = requestAnimationFrame(animate);

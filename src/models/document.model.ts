@@ -6,6 +6,7 @@ export interface IDocument extends Document {
   fileSize: number;
   characterCount: number;
   totalChunks: number;
+  fullText?: string; // <-- Added to preserve full hierarchical text preview
   chunks: Array<{
     chunkIndex: number;
     text: string;
@@ -13,7 +14,7 @@ export interface IDocument extends Document {
     embedding?: number[];
   }>;
   createdAt?: Date;
-  updatedAt?: Date; // <-- Add this property to your interface
+  updatedAt?: Date;
 }
 
 const documentSchema = new Schema<IDocument>(
@@ -23,6 +24,7 @@ const documentSchema = new Schema<IDocument>(
     fileSize: { type: Number, required: true },
     characterCount: { type: Number, default: 0 },
     totalChunks: { type: Number, default: 0 },
+    fullText: { type: String, default: '' }, // <-- Added field schema
     chunks: [
       {
         chunkIndex: Number,
@@ -32,7 +34,7 @@ const documentSchema = new Schema<IDocument>(
       },
     ],
   },
-  { timestamps: true } // <-- Add this schema option so Mongoose generates createdAt & updatedAt
+  { timestamps: true }
 );
 
 export const DocumentModel = model<IDocument>('Document', documentSchema);
