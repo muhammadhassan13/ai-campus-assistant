@@ -48,7 +48,7 @@ export default function StarBackground({
         }
       }
 
-      draw(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+      draw(context: CanvasRenderingContext2D) {
         if (!this.z || this.z === 0) return;
 
         const k = 300 / this.z;
@@ -59,10 +59,10 @@ export default function StarBackground({
           const pSize = Math.max(1, (1 - this.z / width) * 3.5);
           const opacity = Math.min(1, (1 - this.z / width) * 1.5);
 
-          ctx.fillStyle = `rgba(130, 190, 255, ${opacity})`;
-          ctx.beginPath();
-          ctx.arc(px, py, pSize, 0, Math.PI * 2);
-          ctx.fill();
+          context.fillStyle = `rgba(130, 190, 255, ${opacity})`;
+          context.beginPath();
+          context.arc(px, py, pSize, 0, Math.PI * 2);
+          context.fill();
         }
       }
     }
@@ -73,14 +73,14 @@ export default function StarBackground({
 
     let animationFrameId: number;
     function animate() {
-      if (!ctx) return; // Prevents null/undefined error on context
+      if (!ctx) return;
 
       ctx.fillStyle = 'rgba(5, 10, 25, 0.35)';
       ctx.fillRect(0, 0, width, height);
 
       stars.forEach((star) => {
         star.update();
-        star.draw(ctx, width, height); // Pass ctx and dimensions if required by star.draw
+        star.draw(ctx);
       });
 
       animationFrameId = requestAnimationFrame(animate);
