@@ -12,7 +12,7 @@ export default function StarBackground({
     if (!ctx) return;
 
     let width: number, height: number;
-    let stars: Star[] = [];
+    const stars: Star[] = [];
     const numStars = 600;
     const speed = 2.5;
 
@@ -48,7 +48,9 @@ export default function StarBackground({
         }
       }
 
-      draw() {
+      draw(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+        if (!this.z || this.z === 0) return;
+
         const k = 300 / this.z;
         const px = this.x * k + width / 2;
         const py = this.y * k + height / 2;
@@ -71,12 +73,14 @@ export default function StarBackground({
 
     let animationFrameId: number;
     function animate() {
+      if (!ctx) return; // Prevents null/undefined error on context
+
       ctx.fillStyle = 'rgba(5, 10, 25, 0.35)';
       ctx.fillRect(0, 0, width, height);
 
       stars.forEach((star) => {
         star.update();
-        star.draw();
+        star.draw(ctx, width, height); // Pass ctx and dimensions if required by star.draw
       });
 
       animationFrameId = requestAnimationFrame(animate);

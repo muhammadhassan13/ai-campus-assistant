@@ -98,7 +98,7 @@ export default function App() {
     if (!ctx) return;
 
     let width: number, height: number;
-    let stars: Star[] = [];
+    const stars: Star[] = [];
     const numStars = 600;
     const speed = 2.5;
 
@@ -134,14 +134,16 @@ export default function App() {
         }
       }
 
-      draw() {
-        const k = 300 / this.z;
-        const px = this.x * k + width / 2;
-        const py = this.y * k + height / 2;
+      draw(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
+        if (this.z <= 0) return;
 
-        if (px >= 0 && px <= width && py >= 0 && py <= height) {
-          const pSize = Math.max(1, (1 - this.z / width) * 3.5);
-          const opacity = Math.min(1, (1 - this.z / width) * 1.5);
+        const k = 300 / this.z;
+        const px = this.x * k + canvas.width / 2;
+        const py = this.y * k + canvas.height / 2;
+
+        if (px >= 0 && px <= canvas.width && py >= 0 && py <= canvas.height) {
+          const pSize = Math.max(1, (1 - this.z / canvas.width) * 3.5);
+          const opacity = Math.min(1, (1 - this.z / canvas.width) * 1.5);
 
           ctx.fillStyle = `rgba(130, 190, 255, ${opacity})`;
           ctx.beginPath();
@@ -157,12 +159,13 @@ export default function App() {
 
     let animationFrameId: number;
     function animate() {
+      if (!ctx) return;
       ctx.fillStyle = 'rgba(5, 10, 25, 0.35)';
-      ctx.fillRect(0, 0, width, height);
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       stars.forEach((star) => {
         star.update();
-        star.draw();
+        star.draw(ctx, canvas);
       });
 
       animationFrameId = requestAnimationFrame(animate);
@@ -371,7 +374,6 @@ export default function App() {
       msg.estimatedDurationSec || Math.max(2, (totalWords / 140) * 60);
     const currentPos = msg.currentPositionSec || 0;
 
-    // 1. If currently playing this exact message -> Pause
     if (activeMessageIdRef.current === msg.id && msg.isPlaying) {
       window.speechSynthesis.pause();
       if (progressIntervalRef.current) {
@@ -388,7 +390,6 @@ export default function App() {
       return;
     }
 
-    // 2. If currently paused on this exact message -> Resume
     if (activeMessageIdRef.current === msg.id && msg.isPaused) {
       if (window.speechSynthesis.paused) {
         window.speechSynthesis.resume();
@@ -442,7 +443,6 @@ export default function App() {
       return;
     }
 
-    // 3. Fresh play or replay
     stopCurrentSpeech(false);
     let startWordIdx = 0;
     let actualStartSec = 0;
@@ -875,7 +875,6 @@ export default function App() {
     <div style={styles.pageBackground}>
       <canvas id="spaceCanvas" style={styles.canvasBackground}></canvas>
       <style>{`
-        /* Minimalist custom scrollbar: completely uncropped, zero stepper arrows */
         ::-webkit-scrollbar {
           width: 5px;
           height: 5px;
