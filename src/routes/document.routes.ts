@@ -2,13 +2,17 @@ import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { pdfToText } from 'pdf-ts';
-import { chunkText } from '../utils/chunking.util.js';
+import { isValidObjectId } from 'mongoose';
 import { generateEmbeddings } from '../utils/embedding.utils.js';
 import { DocumentModel } from '../models/document.model.js';
 import { cosineSimilarity } from '../utils/vector.util.js';
 import { generateRagResponse } from '../services/rag.service.js';
 import { RagRepository } from '../repositories/rag.repository.js';
+import {
+  parsePdfMultiColumn,
+  parsePdfWithLlamaParse,
+  type ParsedChunk,
+} from '../services/pdfParserService.js';
 import {
   authenticateToken,
   type AuthenticatedRequest,
@@ -33,71 +37,53 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-function parseAndStructureDocument(rawText: string): string {
-  const lines = rawText.split('\n');
-  const processedLines: string[] = [];
-  let inTable = false;
-  let tableRows: string[][] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    const columns = line.split(/\s{3,}|\t/).filter(Boolean);
-
-    if (columns.length >= 2) {
-      inTable = true;
-      tableRows.push(columns);
-    } else {
-      if (inTable && tableRows.length > 0) {
-        processedLines.push(formatTableToMarkdown(tableRows));
-        tableRows = [];
-        inTable = false;
-      }
-      processedLines.push(line);
-    }
-  }
-  if (tableRows.length > 0) {
-    processedLines.push(formatTableToMarkdown(tableRows));
-  }
-
-  let formattedText = processedLines.join('\n');
-
-  const sectionKeywords = [
-    'EDUCATION',
-    'SKILLS',
-    'EXPERIENCE',
-    'PROJECTS',
-    'CERTIFICATIONS',
-    'SUMMARY',
-    'PROFILE',
-    'WORK HISTORY',
-    'TECHNICAL SKILLS',
-  ];
-
-  sectionKeywords.forEach((keyword) => {
-    const regex = new RegExp(`^(${keyword})[:]?$`, 'gim');
-    formattedText = formattedText.replace(regex, `\n\n## $1\n`);
-  });
-
-  const paragraphBlocks = formattedText.split('\n\n');
-  if (paragraphBlocks.length > 0 && !paragraphBlocks[0].startsWith('#')) {
-    paragraphBlocks[0] = `# ${paragraphBlocks[0]}`;
-  }
-
-  return paragraphBlocks.join('\n\n');
+function shouldUseLlamaParse(parser: unknown): boolean {
+  if (parser === 'local') return false;
+  return parser === 'llamaparse' || Boolean(process.env.LLAMA_CLOUD_API_KEY);
 }
 
-function formatTableToMarkdown(rows: string[][]): string {
-  if (rows.length === 0) return '';
-  let md = '\n';
-  const header = rows[0];
-  md += `| ${header.join(' | ')} |\n`;
-  md += `| ${header.map(() => '---').join(' | ')} |\n`;
-  for (let i = 1; i < rows.length; i++) {
-    md += `| ${rows[i].join(' | ')} |\n`;
-  }
-  return md + '\n';
+interface MappedChunk {
+  chunkIndex: number;
+  text: string;
+  characterCount: number;
+  pageNumber?: number;
+  startOffset?: number;
+  endOffset?: number;
+  nodeId?: string;
+  markdownBlockId: string;
+  bbox?: { x: number; y: number; width: number; height: number };
 }
 
+interface CustomChunkType {
+  chunkIndex?: number;
+  text?: string;
+  characterCount?: number;
+  pageNumber?: number;
+  startOffset?: number;
+  endOffset?: number;
+  nodeId?: string;
+  markdownBlockId?: string;
+  embedding?: number[];
+  bbox?: { x?: number; y?: number; width?: number; height?: number };
+}
+
+/**
+ * Helper to normalize bbox whether it comes as an array [x, y, width, height] or an object
+ */
+function normalizeBbox(bbox: unknown) {
+  if (Array.isArray(bbox) && bbox.length >= 4) {
+    return {
+      x: Number(bbox[0]),
+      y: Number(bbox[1]),
+      width: Number(bbox[2]),
+      height: Number(bbox[3]),
+    };
+  }
+  return bbox as
+    { x: number; y: number; width: number; height: number } | undefined;
+}
+
+// 1. Get all documents
 router.get('/', async (req: AuthenticatedRequest, res, next) => {
   try {
     const docs = await DocumentModel.find();
@@ -109,12 +95,21 @@ router.get('/', async (req: AuthenticatedRequest, res, next) => {
       characterCount: doc.characterCount,
       totalChunks: doc.totalChunks,
       fullText: doc.fullText || '',
-      chunks: doc.chunks.map((c) => ({
-        chunkIndex: c.chunkIndex,
-        text: c.text,
-        characterCount: c.characterCount,
-        vectorDimensions: c.embedding?.length || 0,
-      })),
+      chunks: doc.chunks.map((chunk) => {
+        const c = chunk as unknown as CustomChunkType;
+        return {
+          chunkIndex: c.chunkIndex,
+          text: c.text,
+          characterCount: c.characterCount,
+          pageNumber: c.pageNumber,
+          startOffset: c.startOffset,
+          endOffset: c.endOffset,
+          nodeId: c.nodeId,
+          markdownBlockId: c.markdownBlockId || `block-${c.chunkIndex}`,
+          bbox: c.bbox,
+          vectorDimensions: c.embedding?.length || 0,
+        };
+      }),
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
     }));
@@ -125,6 +120,7 @@ router.get('/', async (req: AuthenticatedRequest, res, next) => {
   }
 });
 
+// 2. Upload, parse, map, store in DB, and save raw parser markdown file in uploads/
 router.post(
   '/upload',
   upload.single('file'),
@@ -138,18 +134,51 @@ router.post(
 
       const filePath = path.join(uploadDir, req.file.filename);
       const fileBuffer = fs.readFileSync(filePath);
-      const rawText = await pdfToText(fileBuffer);
-      const structuredText = parseAndStructureDocument(rawText);
+      const useLlamaParse = shouldUseLlamaParse(req.query.parser);
+      const numColumns = req.query.columns
+        ? parseInt(req.query.columns as string, 10)
+        : undefined;
+
+      const parseResult = useLlamaParse
+        ? await parsePdfWithLlamaParse(fileBuffer, req.file.originalname)
+        : await parsePdfMultiColumn(
+            fileBuffer,
+            req.file.originalname,
+            numColumns
+          );
+
+      const structuredText = parseResult.fullText;
+      const chunksData: ParsedChunk[] = parseResult.chunks;
+
+      const mappedChunks: MappedChunk[] = chunksData.map((c, index) => {
+        const chunkIndex = c.chunkIndex ?? index;
+
+        return {
+          chunkIndex,
+          text: c.text,
+          characterCount: c.characterCount ?? c.text.length,
+          pageNumber: c.pageNumber,
+          startOffset: c.startOffset,
+          endOffset: c.endOffset,
+          nodeId: c.nodeId,
+          markdownBlockId: c.nodeId || `block-${chunkIndex}`,
+          bbox: normalizeBbox(c.bbox),
+        };
+      });
 
       const savedDoc = await DocumentModel.create({
         filename: req.file.filename,
         originalName: req.file.originalname,
         fileSize: req.file.size,
         characterCount: structuredText.length,
-        totalChunks: 0,
+        totalChunks: mappedChunks.length,
         fullText: structuredText,
-        chunks: [],
+        chunks: mappedChunks,
       });
+
+      // Save raw parser Markdown content directly to preserve native layout/tables
+      const mdFilePath = path.join(uploadDir, `${savedDoc._id}.md`);
+      fs.writeFileSync(mdFilePath, parseResult.fullText, 'utf-8');
 
       return res.status(201).json({
         success: true,
@@ -159,9 +188,9 @@ router.post(
           originalName: savedDoc.originalName,
           fileSize: savedDoc.fileSize,
           characterCount: savedDoc.characterCount,
-          totalChunks: 0,
+          totalChunks: savedDoc.totalChunks,
           fullText: savedDoc.fullText,
-          chunks: [],
+          chunks: savedDoc.chunks,
         },
       });
     } catch (error) {
@@ -170,6 +199,80 @@ router.post(
   }
 );
 
+// 3. Fetch the saved Markdown file for the visual comparator
+router.get('/:id/markdown', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { id } = req.params;
+    const mdFilePath = path.join(uploadDir, `${id}.md`);
+
+    if (!fs.existsSync(mdFilePath)) {
+      return res.status(404).json({
+        success: false,
+        error: 'Markdown file not found for this document.',
+      });
+    }
+
+    const markdownContent = fs.readFileSync(mdFilePath, 'utf-8');
+    return res.status(200).json({
+      success: true,
+      data: {
+        documentId: id,
+        markdownContent,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 4. Fetch raw Markdown content and MongoDB chunks for visual comparison
+router.get('/:id/comparison', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { id } = req.params;
+    const doc = await DocumentModel.findById(id);
+
+    if (!doc) {
+      return res.status(404).json({
+        success: false,
+        error: 'Document not found.',
+      });
+    }
+
+    const mdFilePath = path.join(uploadDir, `${id}.md`);
+    let markdownContent = '';
+
+    if (fs.existsSync(mdFilePath)) {
+      markdownContent = fs.readFileSync(mdFilePath, 'utf-8');
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        documentId: doc._id,
+        originalName: doc.originalName,
+        markdownContent,
+        chunks: doc.chunks.map((chunk) => {
+          const c = chunk as unknown as CustomChunkType;
+          return {
+            chunkIndex: c.chunkIndex,
+            text: c.text,
+            characterCount: c.characterCount,
+            pageNumber: c.pageNumber,
+            startOffset: c.startOffset,
+            endOffset: c.endOffset,
+            nodeId: c.nodeId,
+            markdownBlockId: c.markdownBlockId || `block-${c.chunkIndex}`,
+            bbox: c.bbox,
+          };
+        }),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 5. Chunk & Embed an existing document
 router.post('/:id/chunk', async (req: AuthenticatedRequest, res, next) => {
   try {
     const { id } = req.params;
@@ -195,17 +298,52 @@ router.post('/:id/chunk', async (req: AuthenticatedRequest, res, next) => {
         .json({ success: false, error: 'Physical file not found on disk.' });
     }
 
+    const useLlamaParse = shouldUseLlamaParse(req.body.parser);
+    const numColumns = req.body.numColumns
+      ? Number(req.body.numColumns)
+      : undefined;
+
     const fileBuffer = fs.readFileSync(filePath);
-    const rawText = await pdfToText(fileBuffer);
-    const extractedText = doc.fullText || parseAndStructureDocument(rawText);
-    const chunks = chunkText(extractedText, 500, 50);
-    const embeddedChunks = await generateEmbeddings(chunks);
+    const spatialChunks = useLlamaParse
+      ? await parsePdfWithLlamaParse(fileBuffer, doc.originalName)
+      : await parsePdfMultiColumn(fileBuffer, doc.originalName, numColumns);
+
+    const formattedChunksForEmbedding = spatialChunks.chunks.map(
+      (c: ParsedChunk, index: number) => {
+        const chunkIndex = c.chunkIndex ?? index;
+
+        return {
+          chunkIndex,
+          text: c.text,
+          characterCount: c.characterCount ?? c.text.length,
+          pageNumber: c.pageNumber,
+          startOffset: c.startOffset,
+          endOffset: c.endOffset,
+          nodeId: c.nodeId,
+          markdownBlockId: c.nodeId || `block-${chunkIndex}`,
+          bbox: normalizeBbox(c.bbox),
+        };
+      }
+    );
+
+    const embeddedChunks = await generateEmbeddings(
+      formattedChunksForEmbedding
+    );
+
+    const extractedText =
+      spatialChunks.fullText ||
+      doc.fullText ||
+      spatialChunks.chunks.map((c: ParsedChunk) => c.text).join('\n\n');
 
     doc.characterCount = extractedText.length;
     doc.totalChunks = embeddedChunks.length;
     doc.fullText = extractedText;
     doc.chunks = embeddedChunks;
     await doc.save();
+
+    // Update/save raw Markdown content directly to preserve native layout/tables
+    const mdFilePath = path.join(uploadDir, `${doc._id}.md`);
+    fs.writeFileSync(mdFilePath, extractedText, 'utf-8');
 
     return res.status(200).json({
       success: true,
@@ -215,12 +353,21 @@ router.post('/:id/chunk', async (req: AuthenticatedRequest, res, next) => {
         characterCount: doc.characterCount,
         totalChunks: doc.totalChunks,
         fullText: doc.fullText,
-        chunks: doc.chunks.map((c) => ({
-          chunkIndex: c.chunkIndex,
-          text: c.text,
-          characterCount: c.characterCount,
-          vectorDimensions: c.embedding?.length || 0,
-        })),
+        chunks: doc.chunks.map((chunk) => {
+          const c = chunk as unknown as CustomChunkType;
+          return {
+            chunkIndex: c.chunkIndex,
+            text: c.text,
+            characterCount: c.characterCount,
+            pageNumber: c.pageNumber,
+            startOffset: c.startOffset,
+            endOffset: c.endOffset,
+            nodeId: c.nodeId,
+            markdownBlockId: c.markdownBlockId || `block-${c.chunkIndex}`,
+            bbox: c.bbox,
+            vectorDimensions: c.embedding?.length || 0,
+          };
+        }),
       },
     });
   } catch (error) {
@@ -228,6 +375,7 @@ router.post('/:id/chunk', async (req: AuthenticatedRequest, res, next) => {
   }
 });
 
+// 6. Unchunk a document
 router.post('/:id/unchunk', async (req: AuthenticatedRequest, res, next) => {
   try {
     const { id } = req.params;
@@ -259,9 +407,18 @@ router.post('/:id/unchunk', async (req: AuthenticatedRequest, res, next) => {
   }
 });
 
+// 7. Delete a document, its source file, and its markdown file
 router.delete('/:id', async (req: AuthenticatedRequest, res, next) => {
   try {
     const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid document ID.',
+      });
+    }
+
     const doc = await DocumentModel.findById(id);
 
     if (!doc) {
@@ -273,21 +430,27 @@ router.delete('/:id', async (req: AuthenticatedRequest, res, next) => {
     if (doc.filename) {
       const filePath = path.join(uploadDir, doc.filename);
       if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+        fs.rmSync(filePath, { force: true });
       }
+    }
+
+    const mdFilePath = path.join(uploadDir, `${id}.md`);
+    if (fs.existsSync(mdFilePath)) {
+      fs.rmSync(mdFilePath, { force: true });
     }
 
     await DocumentModel.findByIdAndDelete(id);
 
     return res.status(200).json({
       success: true,
-      message: 'Document successfully deleted from storage and database.',
+      message: 'Document, source file, and markdown file successfully deleted.',
     });
   } catch (error) {
     next(error);
   }
 });
 
+// 8. Query vector store
 router.post('/query', async (req: AuthenticatedRequest, res, next) => {
   try {
     const { query, documentId, topK = 3 } = req.body;
@@ -313,28 +476,30 @@ router.post('/query', async (req: AuthenticatedRequest, res, next) => {
     ]);
     const queryVector = queryEmbeddings[0].embedding;
 
-    const scoredChunks: Array<{
-      filename: string;
-      chunkIndex: number;
-      text: string;
-      characterCount: number;
-      score: number;
-    }> = [];
+    const scoredChunks: Array<Record<string, unknown>> = [];
 
     for (const doc of docs) {
       for (const chunk of doc.chunks) {
+        const c = chunk as unknown as CustomChunkType;
         scoredChunks.push({
           filename: doc.originalName,
-          chunkIndex: chunk.chunkIndex,
-          text: chunk.text,
-          characterCount: chunk.characterCount,
-          score: cosineSimilarity(queryVector, chunk.embedding || []),
+          documentId: doc._id,
+          chunkIndex: c.chunkIndex,
+          text: c.text,
+          characterCount: c.characterCount,
+          pageNumber: c.pageNumber,
+          startOffset: c.startOffset,
+          endOffset: c.endOffset,
+          nodeId: c.nodeId,
+          markdownBlockId: c.markdownBlockId || `block-${c.chunkIndex}`,
+          bbox: c.bbox,
+          score: cosineSimilarity(queryVector, c.embedding || []),
         });
       }
     }
 
-    scoredChunks.sort((a, b) => b.score - a.score);
-    const topResults = scoredChunks.slice(0, topK);
+    scoredChunks.sort((a, b) => Number(b.score) - Number(a.score));
+    const topResults = scoredChunks.slice(0, Number(topK));
 
     return res.status(200).json({
       success: true,
@@ -345,6 +510,7 @@ router.post('/query', async (req: AuthenticatedRequest, res, next) => {
   }
 });
 
+// 9. RAG Chat
 router.post('/chat', async (req: AuthenticatedRequest, res, next) => {
   try {
     const studentId = req.user?.student_id;
@@ -378,7 +544,7 @@ router.post('/chat', async (req: AuthenticatedRequest, res, next) => {
     const responseText =
       typeof result === 'string'
         ? result
-        : result.answer || JSON.stringify(result);
+        : (result as { answer?: string }).answer || JSON.stringify(result);
 
     await RagRepository.saveMessage(studentId, 'model', responseText);
 
@@ -388,7 +554,7 @@ router.post('/chat', async (req: AuthenticatedRequest, res, next) => {
   }
 });
 
-// Added /compare route for multi-document comparisons
+// 10. Compare two documents
 router.post('/compare', async (req: AuthenticatedRequest, res, next) => {
   try {
     const { documentIdA, documentIdB } = req.body;
@@ -420,7 +586,7 @@ router.post('/compare', async (req: AuthenticatedRequest, res, next) => {
     const responseText =
       typeof result === 'string'
         ? result
-        : result.answer || JSON.stringify(result);
+        : (result as { answer?: string }).answer || JSON.stringify(result);
 
     return res.status(200).json({
       success: true,

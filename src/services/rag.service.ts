@@ -37,19 +37,26 @@ export async function generateRagResponse(
   // 3. Compute cosine similarity scores across ALL chunks from ALL target documents
   const scoredChunks: Array<{
     filename: string;
-    chunkIndex: number;
+    chunkIndex?: number;
     text: string;
+    pageNumber?: number;
+    startOffset?: number;
+    endOffset?: number;
+    nodeId?: string;
     score: number;
   }> = [];
 
   for (const doc of docs) {
     for (const chunk of doc.chunks) {
-      // Fallback to empty array to satisfy TypeScript type requirements for chunk.embedding
       const score = cosineSimilarity(queryVector, chunk.embedding || []);
       scoredChunks.push({
         filename: doc.originalName,
         chunkIndex: chunk.chunkIndex,
         text: chunk.text,
+        pageNumber: chunk.pageNumber,
+        startOffset: chunk.startOffset,
+        endOffset: chunk.endOffset,
+        nodeId: chunk.nodeId,
         score,
       });
     }
@@ -68,12 +75,17 @@ export async function generateRagResponse(
     };
   }
 
-  // 6. Construct prompt with multi-document context block and markdown table prevention rules
+  // 6. Construct prompt with multi-document context block including page & offset metadata
   const contextText = topChunks
-    .map((c) => `[Source: ${c.filename}, Chunk ${c.chunkIndex}]\n${c.text}`)
+    .map(
+      (c) =>
+        `[Source: ${c.filename}, Page ${c.pageNumber ?? 'N/A'}, Chunk ${
+          c.chunkIndex ?? 0
+        }, Chars ${c.startOffset ?? 0}-${c.endOffset ?? 0}]\n${c.text}`
+    )
     .join('\n\n');
 
-  const systemPrompt = `You are an AI campus assistant. Answer the user's question accurately using ONLY the provided context. You must explicitly cite the source document name and chunk number (e.g., [Source: filename.pdf, Chunk X]) whenever referencing facts.
+  const systemPrompt = `You are an AI campus assistant. Answer the user's question accurately using ONLY the provided context. You must explicitly cite the source document name, page number, and chunk number (e.g., [Source: filename.pdf, Page X, Chunk Y]) whenever referencing facts.
 
 Formatting Rules:
 - NEVER use markdown tables (pipes | and dashes -) under any circumstances.
@@ -82,7 +94,7 @@ Formatting Rules:
 
   // 7. Request Groq chat completion
   const completion = await groq.chat.completions.create({
-    model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
+    model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
     messages: [
       {
         role: 'system',
@@ -98,6 +110,10 @@ Formatting Rules:
     sources: topChunks.map((c) => ({
       filename: c.filename,
       chunkIndex: c.chunkIndex,
+      pageNumber: c.pageNumber,
+      startOffset: c.startOffset,
+      endOffset: c.endOffset,
+      nodeId: c.nodeId,
       score: c.score,
     })),
   };

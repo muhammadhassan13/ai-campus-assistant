@@ -1,10 +1,12 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import axios, { AxiosError } from 'axios';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import rehypeRaw from 'rehype-raw';
 import 'katex/dist/katex.min.css';
+import PdfComparator, { type ParsedChunk } from './PdfComparator'; // [cite: 1]
 
 interface ApiError {
   error?: string;
@@ -16,11 +18,15 @@ interface ChunkInfo {
   text: string;
   characterCount: number;
   vectorDimensions: number;
-  // Spatial bounding box coordinates (percentages 0-100 relative to document canvas/page)
+  nodeId?: string;
+  markdownBlockId?: string;
   x?: number;
   y?: number;
   width?: number;
   height?: number;
+  pageHeight?: number;
+  pageWidth?: number;
+  isBottomOrigin?: boolean;
 }
 
 interface UploadedDoc {
@@ -47,228 +53,18 @@ interface ChatMessage {
   estimatedDurationSec?: number;
 }
 
-// Visual Document vs Extracted Continuous Text Inspector Subcomponent with Bidirectional Highlighting
-const VisualTextInspector: React.FC<{
-  documents: UploadedDoc[];
-  token: string;
-}> = ({ documents }) => {
-  const [selectedDocId, setSelectedDocId] = useState<string>('');
-  const [hoveredChunkIndex, setHoveredChunkIndex] = useState<number | null>(
-    null
-  );
-
-  const currentDoc = documents.find((d) => d.documentId === selectedDocId);
-  const ingestedDocs = documents.filter((d) => d.totalChunks > 0);
-
-  return (
-    <div style={styles.uploadCard}>
-      <h3 style={styles.cardSectionTitle}>
-        Visual Document vs. Extracted Continuous Text Inspector
-      </h3>
-      <p style={styles.pageDesc}>
-        Select an ingested document to inspect its original layout side-by-side
-        with its fully extracted continuous text. Hover over text on either side
-        to synchronize and trace the highlighted block.
-      </p>
-
-      <div style={{ marginTop: '8px', marginBottom: '12px' }}>
-        <select
-          value={selectedDocId}
-          onChange={(e) => setSelectedDocId(e.target.value)}
-          style={{ ...styles.input, width: '100%', maxWidth: '420px' }}
-        >
-          <option value="">-- Select an Ingested Document --</option>
-          {ingestedDocs.map((doc) => (
-            <option key={doc.documentId} value={doc.documentId}>
-              {doc.originalName} ({doc.totalChunks} chunks)
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {currentDoc ? (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '16px',
-            height: '560px',
-          }}
-        >
-          {/* Left: Original Document Visual View with Bounding Box Overlays */}
-          <div
-            style={{
-              backgroundColor: '#0F172A',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: '12px',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={styles.mongoServerHeader}>
-              <span>Original Document View ({currentDoc.originalName})</span>
-              {hoveredChunkIndex !== null && (
-                <span style={{ color: '#34D399' }}>
-                  Highlighting Source Block #{hoveredChunkIndex}
-                </span>
-              )}
-            </div>
-            <div
-              style={{
-                flex: 1,
-                position: 'relative',
-                overflow: 'hidden',
-                backgroundColor: '#1E293B',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <iframe
-                src={`/uploads/${currentDoc.filename}`}
-                title={currentDoc.originalName}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  border: 'none',
-                  background: '#FFFFFF',
-                }}
-              />
-              {/* Interactive Bounding Box Overlay Layer */}
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  pointerEvents: 'none',
-                }}
-              >
-                {currentDoc.chunks.map((chunk) => {
-                  const isHovered = hoveredChunkIndex === chunk.chunkIndex;
-                  // Fallback fallback coordinates if backend coordinates aren't explicitly provided
-                  const boxStyle: React.CSSProperties = {
-                    position: 'absolute',
-                    left: `${chunk.x ?? 5}%`,
-                    top: `${chunk.y ?? chunk.chunkIndex * 12 + 5}%`,
-                    width: `${chunk.width ?? 90}%`,
-                    height: `${chunk.height ?? 10}%`,
-                    backgroundColor: isHovered
-                      ? 'rgba(52, 211, 153, 0.35)'
-                      : 'transparent',
-                    border: isHovered
-                      ? '2px solid #34D399'
-                      : '1px dashed rgba(99, 102, 241, 0.2)',
-                    borderRadius: '4px',
-                    pointerEvents: 'auto',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                  };
-                  return (
-                    <div
-                      key={`overlay-${chunk.chunkIndex}`}
-                      style={boxStyle}
-                      onMouseEnter={() =>
-                        setHoveredChunkIndex(chunk.chunkIndex)
-                      }
-                      onMouseLeave={() => setHoveredChunkIndex(null)}
-                      title={`Chunk #${chunk.chunkIndex}`}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Right: Extracted Continuous Text */}
-          <div
-            style={{
-              backgroundColor: '#0F172A',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: '12px',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={styles.mongoServerHeader}>
-              <span>Fully Extracted Continuous Text</span>
-              <span style={{ color: '#818CF8' }}>
-                {currentDoc.characterCount} total characters
-              </span>
-            </div>
-            <div
-              style={{
-                flex: 1,
-                overflowY: 'auto',
-                padding: '16px',
-                fontSize: '13px',
-                lineHeight: '1.7',
-                color: '#CBD5E1',
-              }}
-            >
-              {currentDoc.chunks.map((chunk) => {
-                const isHovered = hoveredChunkIndex === chunk.chunkIndex;
-                return (
-                  <span
-                    key={chunk.chunkIndex}
-                    onMouseEnter={() => setHoveredChunkIndex(chunk.chunkIndex)}
-                    onMouseLeave={() => setHoveredChunkIndex(null)}
-                    style={{
-                      backgroundColor: isHovered
-                        ? 'rgba(99, 102, 241, 0.25)'
-                        : 'transparent',
-                      outline: isHovered ? '1px solid #6366F1' : 'none',
-                      borderRadius: '4px',
-                      padding: '2px 4px',
-                      cursor: 'pointer',
-                      transition: 'background-color 0.15s ease',
-                      display: 'inline',
-                    }}
-                    title={`Extracted from Chunk #${chunk.chunkIndex}`}
-                  >
-                    {chunk.text}{' '}
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div
-          style={{
-            ...styles.emptyStateBox,
-            height: '300px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <p style={styles.emptyFilesText}>
-            {ingestedDocs.length === 0
-              ? 'No ingested documents available. Please upload a PDF and ingest vectors in the Documents tab first.'
-              : 'Please select an ingested document above to view its visual comparison and continuous extracted text.'}
-          </p>
-        </div>
-      )}
-    </div>
-  );
-};
-
 export default function App() {
+  const comparisonDocumentId = new URLSearchParams(window.location.search).get(
+    'comparison'
+  );
   const [token, setToken] = useState<string>(
-    localStorage.getItem('jwt_token') || ''
+    () => localStorage.getItem('jwt_token') ?? ''
   );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // Navigation: 1 = Documents Hub, 2 = General AI Chat, 3 = Document RAG Chat & Voice, 4 = Inspector
   const [activeNavPage, setActiveNavPage] = useState<1 | 2 | 3 | 4>(1);
 
-  // Document Management States
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [docList, setDocList] = useState<UploadedDoc[]>([]);
   const [uploadingDoc, setUploadingDoc] = useState(false);
@@ -278,53 +74,102 @@ export default function App() {
   const [docSuccessMsg, setDocSuccessMsg] = useState('');
   const [expandedDocId, setExpandedDocId] = useState<string | null>(null);
 
-  // Page 2: General AI Chat States
+  // State for Visual Inspector / PdfComparator
+  const [selectedInspectorDocId] = useState<string>(comparisonDocumentId ?? '');
+  const [markdownContent, setMarkdownContent] = useState<string>('');
+  const [comparisonChunks, setComparisonChunks] = useState<ParsedChunk[]>([]);
+  const [comparisonLoading, setComparisonLoading] = useState(
+    Boolean(comparisonDocumentId)
+  );
+  const [comparisonError, setComparisonError] = useState('');
+
   const [generalChatInput, setGeneralChatInput] = useState('');
   const [generalChatLog, setGeneralChatLog] = useState<ChatMessage[]>([]);
   const [generalChatLoading, setGeneralChatLoading] = useState(false);
 
-  // General Chat Voice States
   const [isGeneralRecording, setIsGeneralRecording] = useState(false);
   const generalMediaRecorderRef = useRef<MediaRecorder | null>(null);
   const generalAudioChunksRef = useRef<Blob[]>([]);
   const [processingGeneralVoice, setProcessingGeneralVoice] = useState(false);
 
-  // Page 3: Document RAG Chat & Voice Assistant States
   const [ragChatInput, setRagChatInput] = useState('');
   const [ragChatLog, setRagChatLog] = useState<ChatMessage[]>([]);
   const [ragChatLoading, setRagChatLoading] = useState(false);
   const [selectedDocScope, setSelectedDocScope] = useState<string[]>([]);
 
-  // Real-time Voice Assistant States on Page 3
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const [processingVoice, setProcessingVoice] = useState(false);
 
-  // Robust Web Audio API Speech Synthesis tracking
   const activeMessageIdRef = useRef<string | null>(null);
   const progressIntervalRef = useRef<number | null>(null);
   const positionTimerRef = useRef<number>(0);
 
-  // Starfield Canvas Background Effect
+  const ingestedDocs = docList.filter((d) => d.totalChunks > 0);
+
+  const openComparisonWindow = (documentId: string) => {
+    const comparisonUrl = `${window.location.origin}${window.location.pathname}?comparison=${encodeURIComponent(documentId)}`;
+    window.open(comparisonUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  // Fetch the saved Markdown file when a document is selected in the inspector
+  useEffect(() => {
+    if (!selectedInspectorDocId || !token || comparisonDocumentId) {
+      setMarkdownContent('');
+      return;
+    }
+    axios
+      .get(`/api/documents/${selectedInspectorDocId}/markdown`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      .then((res) => {
+        if (res.data?.data?.markdownContent) {
+          setMarkdownContent(res.data.data.markdownContent);
+        } else {
+          setMarkdownContent('');
+        }
+      })
+      .catch(() => setMarkdownContent('Failed to load markdown.'));
+  }, [selectedInspectorDocId, token]);
+
+  useEffect(() => {
+    if (!comparisonDocumentId) return;
+    if (!token) {
+      setComparisonError(
+        'Your login session is missing. Return to the main app and sign in again.'
+      );
+      setComparisonLoading(false);
+      return;
+    }
+
+    axios
+      .get(`/api/documents/${comparisonDocumentId}/comparison`, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 15000,
+      })
+      .then((res) => {
+        const data = res.data?.data;
+        if (!data) throw new Error('Comparison data was not returned.');
+        setMarkdownContent(data.markdownContent || '');
+        setComparisonChunks(Array.isArray(data.chunks) ? data.chunks : []);
+        setComparisonLoading(false);
+      })
+      .catch(() => {
+        setComparisonError('Unable to load document comparison.');
+        setComparisonLoading(false);
+      });
+  }, [comparisonDocumentId, token]);
+
   useEffect(() => {
     const canvas = document.getElementById('spaceCanvas') as HTMLCanvasElement;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d')!;
+    const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     let width: number, height: number;
-    const stars: Star[] = [];
     const numStars = 600;
     const speed = 2.5;
-
-    function resize() {
-      width = canvas.width = window.innerWidth;
-      height = canvas.height = window.innerHeight;
-    }
-
-    window.addEventListener('resize', resize);
-    resize();
 
     class Star {
       x!: number;
@@ -350,32 +195,49 @@ export default function App() {
         }
       }
 
-      draw(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
+      draw(
+        canvasCtx: CanvasRenderingContext2D,
+        targetCanvas: HTMLCanvasElement
+      ) {
         if (this.z <= 0) return;
 
         const k = 300 / this.z;
-        const px = this.x * k + canvas.width / 2;
-        const py = this.y * k + canvas.height / 2;
+        const px = this.x * k + targetCanvas.width / 2;
+        const py = this.y * k + targetCanvas.height / 2;
 
-        if (px >= 0 && px <= canvas.width && py >= 0 && py <= canvas.height) {
-          const pSize = Math.max(1, (1 - this.z / canvas.width) * 3.5);
-          const opacity = Math.min(1, (1 - this.z / canvas.width) * 1.5);
+        if (
+          px >= 0 &&
+          px <= targetCanvas.width &&
+          py >= 0 &&
+          py <= targetCanvas.height
+        ) {
+          const pSize = Math.max(1, (1 - this.z / targetCanvas.width) * 3.5);
+          const opacity = Math.min(1, (1 - this.z / targetCanvas.width) * 1.5);
 
-          ctx.fillStyle = `rgba(130, 190, 255, ${opacity})`;
-          ctx.beginPath();
-          ctx.arc(px, py, pSize, 0, Math.PI * 2);
-          ctx.fill();
+          canvasCtx.fillStyle = `rgba(130, 190, 255, ${opacity})`;
+          canvasCtx.beginPath();
+          canvasCtx.arc(px, py, pSize, 0, Math.PI * 2);
+          canvasCtx.fill();
         }
       }
     }
+
+    const stars: Star[] = [];
+
+    const resize = () => {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    };
+
+    window.addEventListener('resize', resize);
+    resize();
 
     for (let i = 0; i < numStars; i++) {
       stars.push(new Star());
     }
 
     let animationFrameId: number;
-    function animate() {
-      if (!ctx) return;
+    const animate = () => {
       ctx.fillStyle = 'rgba(5, 10, 25, 0.35)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -385,7 +247,7 @@ export default function App() {
       });
 
       animationFrameId = requestAnimationFrame(animate);
-    }
+    };
 
     animate();
 
@@ -402,6 +264,17 @@ export default function App() {
     };
     updateVoices();
     window.speechSynthesis.onvoiceschanged = updateVoices;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
   }, []);
 
   const formatTime = (seconds: number) => {
@@ -422,7 +295,7 @@ export default function App() {
       .replace(/[-*+]\s+/g, '');
   };
 
-  const stopCurrentSpeech = (resetState = true) => {
+  const stopCurrentSpeech = useCallback((resetState = true) => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
@@ -448,7 +321,7 @@ export default function App() {
       );
       activeMessageIdRef.current = null;
     }
-  };
+  }, []);
 
   const getBritishFemaleVoice = (): SpeechSynthesisVoice | null => {
     if (!('speechSynthesis' in window)) return null;
@@ -467,7 +340,7 @@ export default function App() {
         v.name.toLowerCase().includes('stephanie') ||
         v.name.toLowerCase().includes('susan') ||
         v.name.toLowerCase().includes('uk english') ||
-        v.name.toLowerCase().includes('george') === false
+        !v.name.toLowerCase().includes('george')
     );
     if (preferredFemale) return preferredFemale;
     if (britishVoices.length > 0) return britishVoices[0];
@@ -1079,6 +952,42 @@ export default function App() {
     );
   };
 
+  if (comparisonDocumentId) {
+    return (
+      <main
+        style={{
+          position: 'fixed',
+          inset: 0,
+          height: '100vh',
+          width: '100vw',
+          overflow: 'hidden',
+          background: '#0F172A',
+          padding: 0,
+          boxSizing: 'border-box',
+        }}
+      >
+        {comparisonLoading ? (
+          <p style={{ color: '#CBD5E1', padding: '24px' }}>
+            Loading document comparison...
+          </p>
+        ) : comparisonError ? (
+          <p style={{ color: '#FCA5A5', padding: '24px' }}>{comparisonError}</p>
+        ) : (
+          <PdfComparator
+            chunks={comparisonChunks.map((chunk) => ({
+              ...chunk,
+              markdownBlockId:
+                chunk.markdownBlockId !== undefined
+                  ? String(chunk.markdownBlockId)
+                  : undefined,
+            }))}
+            markdownContent={markdownContent}
+          />
+        )}
+      </main>
+    );
+  }
+
   return (
     <div style={styles.pageBackground}>
       <canvas id="spaceCanvas" style={styles.canvasBackground}></canvas>
@@ -1122,46 +1031,24 @@ export default function App() {
           </div>
           {token && (
             <nav style={styles.navBar}>
-              <button
-                style={
-                  activeNavPage === 1
-                    ? styles.activeNavBtn
-                    : styles.inactiveNavBtn
-                }
-                onClick={() => setActiveNavPage(1)}
-              >
-                Documents ({docList.length})
-              </button>
-              <button
-                style={
-                  activeNavPage === 2
-                    ? styles.activeNavBtn
-                    : styles.inactiveNavBtn
-                }
-                onClick={() => setActiveNavPage(2)}
-              >
-                General AI Chat
-              </button>
-              <button
-                style={
-                  activeNavPage === 3
-                    ? styles.activeNavBtn
-                    : styles.inactiveNavBtn
-                }
-                onClick={() => setActiveNavPage(3)}
-              >
-                RAG & Voice Chat
-              </button>
-              <button
-                style={
-                  activeNavPage === 4
-                    ? styles.activeNavBtn
-                    : styles.inactiveNavBtn
-                }
-                onClick={() => setActiveNavPage(4)}
-              >
-                Visual Inspector
-              </button>
+              {[
+                { id: 1, label: `Documents (${docList.length})` },
+                { id: 2, label: 'General AI Chat' },
+                { id: 3, label: 'RAG & Voice Chat' },
+                { id: 4, label: 'Visual Inspector' },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  style={
+                    activeNavPage === tab.id
+                      ? styles.activeNavBtn
+                      : styles.inactiveNavBtn
+                  }
+                  onClick={() => setActiveNavPage(tab.id as 1 | 2 | 3 | 4)}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </nav>
           )}
           {token && (
@@ -1451,7 +1338,51 @@ export default function App() {
                           <div style={styles.markdownContent}>
                             <ReactMarkdown
                               remarkPlugins={[remarkGfm, remarkMath]}
-                              rehypePlugins={[rehypeKatex]}
+                              rehypePlugins={[rehypeRaw, rehypeKatex]}
+                              components={{
+                                table: ({ children }) => (
+                                  <div
+                                    style={{
+                                      overflowX: 'auto',
+                                      margin: '8px 0',
+                                    }}
+                                  >
+                                    <table
+                                      style={{
+                                        width: '100%',
+                                        borderCollapse: 'collapse',
+                                        fontSize: '12px',
+                                      }}
+                                    >
+                                      {children}
+                                    </table>
+                                  </div>
+                                ),
+                                th: ({ children }) => (
+                                  <th
+                                    style={{
+                                      border:
+                                        '1px solid rgba(255, 255, 255, 0.15)',
+                                      padding: '5px 8px',
+                                      backgroundColor: '#0F172A',
+                                      textAlign: 'left',
+                                    }}
+                                  >
+                                    {children}
+                                  </th>
+                                ),
+                                td: ({ children }) => (
+                                  <td
+                                    style={{
+                                      border:
+                                        '1px solid rgba(255, 255, 255, 0.1)',
+                                      padding: '5px 8px',
+                                    }}
+                                  >
+                                    {children}
+                                  </td>
+                                ),
+                              }}
                             >
                               {m.text}
                             </ReactMarkdown>
@@ -1675,7 +1606,51 @@ export default function App() {
                           <div style={styles.markdownContent}>
                             <ReactMarkdown
                               remarkPlugins={[remarkGfm, remarkMath]}
-                              rehypePlugins={[rehypeKatex]}
+                              rehypePlugins={[rehypeRaw, rehypeKatex]}
+                              components={{
+                                table: ({ children }) => (
+                                  <div
+                                    style={{
+                                      overflowX: 'auto',
+                                      margin: '8px 0',
+                                    }}
+                                  >
+                                    <table
+                                      style={{
+                                        width: '100%',
+                                        borderCollapse: 'collapse',
+                                        fontSize: '12px',
+                                      }}
+                                    >
+                                      {children}
+                                    </table>
+                                  </div>
+                                ),
+                                th: ({ children }) => (
+                                  <th
+                                    style={{
+                                      border:
+                                        '1px solid rgba(255, 255, 255, 0.15)',
+                                      padding: '5px 8px',
+                                      backgroundColor: '#0F172A',
+                                      textAlign: 'left',
+                                    }}
+                                  >
+                                    {children}
+                                  </th>
+                                ),
+                                td: ({ children }) => (
+                                  <td
+                                    style={{
+                                      border:
+                                        '1px solid rgba(255, 255, 255, 0.1)',
+                                      padding: '5px 8px',
+                                    }}
+                                  >
+                                    {children}
+                                  </td>
+                                ),
+                              }}
                             >
                               {m.text}
                             </ReactMarkdown>
@@ -1829,10 +1804,52 @@ export default function App() {
                     <h2 style={styles.pageTitle}>Visual Document Inspector</h2>
                     <p style={styles.pageDesc}>
                       Examine original document layouts side-by-side with fully
-                      extracted continuous text.
+                      extracted continuous text and Markdown.
                     </p>
                   </div>
-                  <VisualTextInspector documents={docList} token={token} />
+
+                  <div style={styles.uploadCard}>
+                    <div style={{ marginTop: '8px', marginBottom: '12px' }}>
+                      <select
+                        value={selectedInspectorDocId}
+                        onChange={(e) => {
+                          const documentId = e.target.value;
+                          if (documentId) openComparisonWindow(documentId);
+                        }}
+                        style={{
+                          ...styles.input,
+                          width: '100%',
+                          maxWidth: '420px',
+                        }}
+                      >
+                        <option value="">
+                          -- Select an Ingested Document --
+                        </option>
+                        {ingestedDocs.map((doc) => (
+                          <option key={doc.documentId} value={doc.documentId}>
+                            {doc.originalName} ({doc.totalChunks} chunks)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div
+                      style={{
+                        ...styles.emptyStateBox,
+                        height: '300px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <p style={styles.emptyFilesText}>
+                        {ingestedDocs.length === 0
+                          ? 'No ingested documents available. Upload and ingest vectors first.'
+                          : 'Select an ingested document to open the comparison in a new tab.'}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -2412,7 +2429,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '12px',
   },
   toolbarLabel: {
-    fontSize: '11px',
+    fontSize: '11.5px',
     fontWeight: '700',
     color: '#818CF8',
     textTransform: 'uppercase',
@@ -2489,5 +2506,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '16px',
     letterSpacing: '2px',
     color: '#94A3B8',
+  },
+  formStack: {
+    display: 'flex',
+    flexDirection: 'column',
   },
 };
