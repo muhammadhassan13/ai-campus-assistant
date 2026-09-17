@@ -67,9 +67,6 @@ interface CustomChunkType {
   bbox?: { x?: number; y?: number; width?: number; height?: number };
 }
 
-/**
- * Helper to normalize bbox whether it comes as an array [x, y, width, height] or an object
- */
 function normalizeBbox(bbox: unknown) {
   if (Array.isArray(bbox) && bbox.length >= 4) {
     return {
@@ -120,7 +117,7 @@ router.get('/', async (req: AuthenticatedRequest, res, next) => {
   }
 });
 
-// 2. Upload, parse, map, store in DB, and save raw parser markdown file in uploads/
+// 2. Upload, parse, map, store in DB, and save raw parser markdown file
 router.post(
   '/upload',
   upload.single('file'),
@@ -152,7 +149,6 @@ router.post(
 
       const mappedChunks: MappedChunk[] = chunksData.map((c, index) => {
         const chunkIndex = c.chunkIndex ?? index;
-
         return {
           chunkIndex,
           text: c.text,
@@ -174,9 +170,11 @@ router.post(
         totalChunks: mappedChunks.length,
         fullText: structuredText,
         chunks: mappedChunks,
+        blocks: parseResult.blocks || [],
+        pageWidth: parseResult.pageDimensions?.width || 0,
+        pageHeight: parseResult.pageDimensions?.height || 0,
       });
 
-      // Save raw parser Markdown content directly to preserve native layout/tables
       const mdFilePath = path.join(uploadDir, `${savedDoc._id}.md`);
       fs.writeFileSync(mdFilePath, parseResult.fullText, 'utf-8');
 
@@ -199,7 +197,7 @@ router.post(
   }
 );
 
-// 3. Fetch the saved Markdown file for the visual comparator
+// 3. Fetch saved Markdown file
 router.get('/:id/markdown', async (req: AuthenticatedRequest, res, next) => {
   try {
     const { id } = req.params;
@@ -215,17 +213,14 @@ router.get('/:id/markdown', async (req: AuthenticatedRequest, res, next) => {
     const markdownContent = fs.readFileSync(mdFilePath, 'utf-8');
     return res.status(200).json({
       success: true,
-      data: {
-        documentId: id,
-        markdownContent,
-      },
+      data: { documentId: id, markdownContent },
     });
   } catch (error) {
     next(error);
   }
 });
 
-// 4. Fetch raw Markdown content and MongoDB chunks for visual comparison
+// 4. Fetch raw Markdown + MongoDB blocks for visual comparison
 router.get('/:id/comparison', async (req: AuthenticatedRequest, res, next) => {
   try {
     const { id } = req.params;
@@ -249,8 +244,12 @@ router.get('/:id/comparison', async (req: AuthenticatedRequest, res, next) => {
       success: true,
       data: {
         documentId: doc._id,
+        filename: doc.filename,
         originalName: doc.originalName,
         markdownContent,
+        blocks: doc.blocks || [],
+        pageWidth: doc.pageWidth || 0,
+        pageHeight: doc.pageHeight || 0,
         chunks: doc.chunks.map((chunk) => {
           const c = chunk as unknown as CustomChunkType;
           return {
@@ -272,7 +271,7 @@ router.get('/:id/comparison', async (req: AuthenticatedRequest, res, next) => {
   }
 });
 
-// 5. Chunk & Embed an existing document
+// 5. Chunk & Embed existing document
 router.post('/:id/chunk', async (req: AuthenticatedRequest, res, next) => {
   try {
     const { id } = req.params;
@@ -311,7 +310,6 @@ router.post('/:id/chunk', async (req: AuthenticatedRequest, res, next) => {
     const formattedChunksForEmbedding = spatialChunks.chunks.map(
       (c: ParsedChunk, index: number) => {
         const chunkIndex = c.chunkIndex ?? index;
-
         return {
           chunkIndex,
           text: c.text,
@@ -339,9 +337,11 @@ router.post('/:id/chunk', async (req: AuthenticatedRequest, res, next) => {
     doc.totalChunks = embeddedChunks.length;
     doc.fullText = extractedText;
     doc.chunks = embeddedChunks;
+    doc.blocks = spatialChunks.blocks || doc.blocks || [];
+    doc.pageWidth = spatialChunks.pageDimensions?.width || doc.pageWidth;
+    doc.pageHeight = spatialChunks.pageDimensions?.height || doc.pageHeight;
     await doc.save();
 
-    // Update/save raw Markdown content directly to preserve native layout/tables
     const mdFilePath = path.join(uploadDir, `${doc._id}.md`);
     fs.writeFileSync(mdFilePath, extractedText, 'utf-8');
 
@@ -407,16 +407,15 @@ router.post('/:id/unchunk', async (req: AuthenticatedRequest, res, next) => {
   }
 });
 
-// 7. Delete a document, its source file, and its markdown file
+// 7. Delete document + source file + markdown file
 router.delete('/:id', async (req: AuthenticatedRequest, res, next) => {
   try {
     const { id } = req.params;
 
     if (!isValidObjectId(id)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid document ID.',
-      });
+      return res
+        .status(400)
+        .json({ success: false, error: 'Invalid document ID.' });
     }
 
     const doc = await DocumentModel.findById(id);

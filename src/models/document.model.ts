@@ -21,6 +21,18 @@ export interface IChunk {
   bbox?: IBbox;
 }
 
+export interface IMarkdownBlock {
+  id: string;
+  type: string;
+  md: string;
+  value: string;
+  pageNumber: number;
+  bbox: IBbox;
+  level?: number;
+  rows?: string[][];
+  html?: string;
+}
+
 export interface IDocument extends Document {
   filename: string;
   originalName: string;
@@ -29,6 +41,9 @@ export interface IDocument extends Document {
   totalChunks: number;
   fullText?: string;
   chunks: IChunk[];
+  blocks: IMarkdownBlock[];
+  pageWidth?: number;
+  pageHeight?: number;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -48,7 +63,6 @@ const chunkSchema = new Schema<IChunk>(
     chunkIndex: { type: Number, index: true },
     text: { type: String, required: true },
     characterCount: { type: Number },
-    // Vector search indices are configured externally in MongoDB Atlas Search
     embedding: { type: [Number], select: false },
     pageNumber: { type: Number },
     startOffset: { type: Number },
@@ -60,6 +74,21 @@ const chunkSchema = new Schema<IChunk>(
   { _id: true }
 );
 
+const markdownBlockSchema = new Schema<IMarkdownBlock>(
+  {
+    id: { type: String, required: true },
+    type: { type: String, default: 'text' },
+    md: { type: String, default: '' },
+    value: { type: String, default: '' },
+    pageNumber: { type: Number, required: true },
+    bbox: { type: bboxSchema, required: true },
+    level: { type: Number },
+    rows: { type: [[String]] },
+    html: { type: String },
+  },
+  { _id: false }
+);
+
 const documentSchema = new Schema<IDocument>(
   {
     filename: { type: String, required: true, index: true },
@@ -69,6 +98,9 @@ const documentSchema = new Schema<IDocument>(
     totalChunks: { type: Number, default: 0 },
     fullText: { type: String, default: '' },
     chunks: [chunkSchema],
+    blocks: { type: [markdownBlockSchema], default: [] },
+    pageWidth: { type: Number, default: 0 },
+    pageHeight: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

@@ -6,7 +6,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import 'katex/dist/katex.min.css';
-import PdfComparator, { type ParsedChunk } from './PdfComparator'; // [cite: 1]
+import PdfComparator, { type MarkdownBlock } from './PdfComparator';
 
 interface ApiError {
   error?: string;
@@ -77,11 +77,14 @@ export default function App() {
   // State for Visual Inspector / PdfComparator
   const [selectedInspectorDocId] = useState<string>(comparisonDocumentId ?? '');
   const [markdownContent, setMarkdownContent] = useState<string>('');
-  const [comparisonChunks, setComparisonChunks] = useState<ParsedChunk[]>([]);
+  const [comparisonBlocks, setComparisonBlocks] = useState<MarkdownBlock[]>([]);
+  const [pageWidth, setPageWidth] = useState(0);
+  const [pageHeight, setPageHeight] = useState(0);
   const [comparisonLoading, setComparisonLoading] = useState(
     Boolean(comparisonDocumentId)
   );
   const [comparisonError, setComparisonError] = useState('');
+  const [pdfFilename, setPdfFilename] = useState('');
 
   const [generalChatInput, setGeneralChatInput] = useState('');
   const [generalChatLog, setGeneralChatLog] = useState<ChatMessage[]>([]);
@@ -109,9 +112,36 @@ export default function App() {
   const ingestedDocs = docList.filter((d) => d.totalChunks > 0);
 
   const openComparisonWindow = (documentId: string) => {
+    const currentToken = localStorage.getItem('jwt_token');
+    if (!currentToken) {
+      alert('Your session expired. Please sign in again.');
+      return;
+    }
     const comparisonUrl = `${window.location.origin}${window.location.pathname}?comparison=${encodeURIComponent(documentId)}`;
     window.open(comparisonUrl, '_blank', 'noopener,noreferrer');
   };
+
+  // Global 401 handler — signs the user out if the token is bad/expired
+  useEffect(() => {
+    const interceptor = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error?.response?.status === 401) {
+          console.warn('[Auth] 401 received, clearing token');
+          localStorage.removeItem('jwt_token');
+          if (comparisonDocumentId) {
+            window.close();
+          } else {
+            setToken('');
+          }
+        }
+        return Promise.reject(error);
+      }
+    );
+    return () => {
+      axios.interceptors.response.eject(interceptor);
+    };
+  }, [comparisonDocumentId]);
 
   // Fetch the saved Markdown file when a document is selected in the inspector
   useEffect(() => {
@@ -131,7 +161,7 @@ export default function App() {
         }
       })
       .catch(() => setMarkdownContent('Failed to load markdown.'));
-  }, [selectedInspectorDocId, token]);
+  }, [selectedInspectorDocId, token, comparisonDocumentId]);
 
   useEffect(() => {
     if (!comparisonDocumentId) return;
@@ -152,11 +182,18 @@ export default function App() {
         const data = res.data?.data;
         if (!data) throw new Error('Comparison data was not returned.');
         setMarkdownContent(data.markdownContent || '');
-        setComparisonChunks(Array.isArray(data.chunks) ? data.chunks : []);
+        setComparisonBlocks(Array.isArray(data.blocks) ? data.blocks : []);
+        setPageWidth(data.pageWidth || 0);
+        setPageHeight(data.pageHeight || 0);
+        if (data.filename) setPdfFilename(data.filename);
         setComparisonLoading(false);
       })
-      .catch(() => {
-        setComparisonError('Unable to load document comparison.');
+      .catch((err: unknown) => {
+        const error = err as AxiosError<{ error?: string }>;
+        const status = error.response?.status;
+        const msg =
+          error.response?.data?.error || error.message || 'Unknown error';
+        setComparisonError(status ? `[${status}] ${msg}` : msg);
         setComparisonLoading(false);
       });
   }, [comparisonDocumentId, token]);
@@ -631,8 +668,14 @@ export default function App() {
       setDocList((prev) => [...prev, newDoc]);
       setDocSuccessMsg(`Uploaded successfully: ${newDoc.originalName}`);
       setSelectedFile(null);
-    } catch {
-      alert('Document upload failed.');
+    } catch (err: unknown) {
+      const error = err as AxiosError<{ error?: string; details?: string }>;
+      const backendMsg =
+        error.response?.data?.error ||
+        error.response?.data?.details ||
+        error.message ||
+        'Unknown upload error';
+      alert(`Document upload failed.\n\n${backendMsg}`);
     } finally {
       setUploadingDoc(false);
     }
@@ -645,7 +688,10 @@ export default function App() {
       const res = await axios.post(
         `/api/documents/${documentId}/chunk`,
         {},
-        { headers: { Authorization: `Bearer ${token}` } }
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          timeout: 600000,
+        }
       );
       const updated = res.data.data;
       setDocList((prev) =>
@@ -661,8 +707,18 @@ export default function App() {
         )
       );
       setDocSuccessMsg(`Vectors Ingested: ${updated.originalName}`);
-    } catch {
-      alert('Document vector ingestion failed.');
+    } catch (err: unknown) {
+      const error = err as AxiosError<{ error?: string; details?: string }>;
+      const status = error.response?.status;
+      const msg =
+        error.response?.data?.error ||
+        error.response?.data?.details ||
+        error.message ||
+        'Unknown error';
+      console.error('[Chunk] Failed:', err);
+      alert(
+        `Document vector ingestion failed.\n\n${status ? `[${status}] ` : ''}${msg}`
+      );
     } finally {
       setChunkingDocId(null);
     }
@@ -974,14 +1030,15 @@ export default function App() {
           <p style={{ color: '#FCA5A5', padding: '24px' }}>{comparisonError}</p>
         ) : (
           <PdfComparator
-            chunks={comparisonChunks.map((chunk) => ({
-              ...chunk,
-              markdownBlockId:
-                chunk.markdownBlockId !== undefined
-                  ? String(chunk.markdownBlockId)
-                  : undefined,
-            }))}
             markdownContent={markdownContent}
+            blocks={comparisonBlocks}
+            pageWidth={pageWidth}
+            pageHeight={pageHeight}
+            pdfUrl={
+              pdfFilename
+                ? `http://localhost:3001/uploads/${pdfFilename}`
+                : undefined
+            }
           />
         )}
       </main>
@@ -1237,7 +1294,7 @@ export default function App() {
                                       >
                                         {unchunkingDocId === doc.documentId
                                           ? 'Processing...'
-                                          : '🔄 Purge Vectors'}
+                                          : '🔁 Purge Vectors'}
                                       </button>
                                     </>
                                   )}
