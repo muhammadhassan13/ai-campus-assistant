@@ -31,6 +31,7 @@ interface NavItem {
 }
 
 const SIDEBAR_STORAGE_KEY = 'ui_sidebar_expanded';
+const ANIM_MS = 200;
 
 function readStoredExpanded(): boolean {
   try {
@@ -71,6 +72,15 @@ export default function Sidebar({
   const isDark = theme.name === 'deep-space';
   const width = expanded ? 240 : 72;
 
+  const labelStyle: React.CSSProperties = {
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    opacity: expanded ? 1 : 0,
+    maxWidth: expanded ? 200 : 0,
+    transition: `opacity 140ms ${theme.ease}, max-width ${ANIM_MS}ms ${theme.ease}`,
+    pointerEvents: expanded ? 'auto' : 'none',
+  };
+
   return (
     <aside
       style={{
@@ -81,14 +91,12 @@ export default function Sidebar({
         gap: 12,
         padding: expanded ? 16 : 12,
         background: theme.glassBase,
-        backdropFilter: theme.glassBlur,
-        WebkitBackdropFilter: theme.glassBlur,
         border: `1px solid ${theme.glassBorder}`,
         borderRadius: theme.radiusXl,
         boxShadow: theme.glassShadowStrong,
         fontFamily: theme.fontSans,
         overflow: 'hidden',
-        transition: `width 260ms ${theme.spring}, padding 260ms ${theme.spring}`,
+        transition: `width ${ANIM_MS}ms ${theme.ease}, padding ${ANIM_MS}ms ${theme.ease}`,
         flexShrink: 0,
         boxSizing: 'border-box',
       }}
@@ -119,33 +127,37 @@ export default function Sidebar({
         >
           <IconSparkle size={18} color="#FFFFFF" strokeWidth={2.2} />
         </div>
-        {expanded && (
-          <div style={{ overflow: 'hidden' }}>
-            <div
-              style={{
-                fontSize: 14,
-                fontWeight: 700,
-                color: theme.textPrimary,
-                letterSpacing: '-0.2px',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              Campus.AI
-            </div>
-            <div
-              style={{
-                fontSize: 10,
-                color: theme.textTertiary,
-                letterSpacing: '0.3px',
-                textTransform: 'uppercase',
-                fontWeight: 600,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              Workspace
-            </div>
+        <div
+          style={{
+            ...labelStyle,
+            flex: expanded ? 1 : 0,
+            minWidth: 0,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 14,
+              fontWeight: 700,
+              color: theme.textPrimary,
+              letterSpacing: '-0.2px',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Campus.AI
           </div>
-        )}
+          <div
+            style={{
+              fontSize: 10,
+              color: theme.textTertiary,
+              letterSpacing: '0.3px',
+              textTransform: 'uppercase',
+              fontWeight: 600,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Workspace
+          </div>
+        </div>
       </div>
 
       {/* Nav */}
@@ -169,7 +181,7 @@ export default function Sidebar({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 12,
+                gap: expanded ? 12 : 0,
                 padding: expanded ? '10px 12px' : '10px 0',
                 borderRadius: theme.radiusSm,
                 border: 'none',
@@ -180,7 +192,7 @@ export default function Sidebar({
                 fontSize: 13,
                 fontWeight: isActive ? 600 : 500,
                 fontFamily: theme.fontSans,
-                transition: `background 160ms ${theme.ease}, color 160ms ${theme.ease}`,
+                transition: `background 160ms ${theme.ease}, color 160ms ${theme.ease}, padding ${ANIM_MS}ms ${theme.ease}, gap ${ANIM_MS}ms ${theme.ease}`,
                 justifyContent: expanded ? 'flex-start' : 'center',
                 position: 'relative',
               }}
@@ -202,32 +214,36 @@ export default function Sidebar({
                 color={isActive ? theme.accent : theme.textSecondary}
                 strokeWidth={1.9}
               />
-              {expanded && (
-                <>
-                  <span style={{ flex: 1, whiteSpace: 'nowrap' }}>
-                    {item.label}
-                  </span>
-                  {item.badge !== undefined && item.badge > 0 && (
-                    <span
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        padding: '2px 6px',
-                        borderRadius: 6,
-                        background: isActive
-                          ? theme.accent
-                          : isDark
-                            ? 'rgba(255,255,255,0.08)'
-                            : 'rgba(60,60,67,0.08)',
-                        color: isActive ? '#FFFFFF' : theme.textSecondary,
-                        minWidth: 18,
-                        textAlign: 'center',
-                      }}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
-                </>
+              <span
+                style={{
+                  ...labelStyle,
+                  flex: expanded ? 1 : 0,
+                  minWidth: 0,
+                }}
+              >
+                {item.label}
+              </span>
+              {item.badge !== undefined && item.badge > 0 && (
+                <span
+                  style={{
+                    ...labelStyle,
+                    flexShrink: 0,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    padding: expanded ? '2px 6px' : 0,
+                    borderRadius: 6,
+                    background: isActive
+                      ? theme.accent
+                      : isDark
+                        ? 'rgba(255,255,255,0.08)'
+                        : 'rgba(60,60,67,0.08)',
+                    color: isActive ? '#FFFFFF' : theme.textSecondary,
+                    minWidth: expanded ? 18 : 0,
+                    textAlign: 'center',
+                  }}
+                >
+                  {item.badge}
+                </span>
               )}
               {!expanded && item.badge !== undefined && item.badge > 0 && (
                 <span
@@ -284,11 +300,16 @@ export default function Sidebar({
           ) : (
             <IconMoon size={18} color={theme.textSecondary} />
           )}
-          {expanded && (
-            <span style={{ flex: 1, textAlign: 'left', whiteSpace: 'nowrap' }}>
-              {isDark ? 'Liquid Glass' : 'Deep Space'}
-            </span>
-          )}
+          <span
+            style={{
+              ...labelStyle,
+              flex: expanded ? 1 : 0,
+              minWidth: 0,
+              textAlign: 'left',
+            }}
+          >
+            {isDark ? 'Liquid Glass' : 'Deep Space'}
+          </span>
         </button>
 
         <button
@@ -305,10 +326,17 @@ export default function Sidebar({
           }}
         >
           <IconLogout size={18} color="currentColor" />
-          {expanded && <span style={{ whiteSpace: 'nowrap' }}>Sign Out</span>}
+          <span
+            style={{
+              ...labelStyle,
+              flex: expanded ? 1 : 0,
+              minWidth: 0,
+            }}
+          >
+            Sign Out
+          </span>
         </button>
 
-        {/* Collapse / expand toggle */}
         <button
           onClick={() => setExpanded((v) => !v)}
           title={expanded ? 'Collapse sidebar' : 'Expand sidebar'}
@@ -328,12 +356,22 @@ export default function Sidebar({
               alignItems: 'center',
               justifyContent: 'center',
               transform: expanded ? 'rotate(90deg)' : 'rotate(-90deg)',
-              transition: `transform 220ms ${theme.spring}`,
+              transition: `transform ${ANIM_MS}ms ${theme.ease}`,
+              flexShrink: 0,
             }}
           >
             <IconChevronDown size={18} color={theme.textSecondary} />
           </span>
-          {expanded && <span style={{ whiteSpace: 'nowrap' }}>Collapse</span>}
+          <span
+            style={{
+              ...labelStyle,
+              flex: expanded ? 1 : 0,
+              minWidth: 0,
+              textAlign: 'left',
+            }}
+          >
+            Collapse
+          </span>
         </button>
       </div>
     </aside>
@@ -348,7 +386,7 @@ function footerButtonStyle(
   return {
     display: 'flex',
     alignItems: 'center',
-    gap: 12,
+    gap: expanded ? 12 : 0,
     padding: expanded ? '10px 12px' : '10px 0',
     borderRadius: theme.radiusSm,
     border: 'none',
@@ -358,7 +396,7 @@ function footerButtonStyle(
     fontSize: 12,
     fontWeight: 500,
     fontFamily: theme.fontSans,
-    transition: `background 160ms ${theme.ease}, color 160ms ${theme.ease}`,
+    transition: `background 160ms ${theme.ease}, color 160ms ${theme.ease}, padding ${ANIM_MS}ms ${theme.ease}, gap ${ANIM_MS}ms ${theme.ease}`,
     justifyContent: expanded ? 'flex-start' : 'center',
   };
 }

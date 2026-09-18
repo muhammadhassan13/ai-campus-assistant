@@ -10,7 +10,7 @@ import { generateRagResponse } from '../services/rag.service.js';
 import { RagRepository } from '../repositories/rag.repository.js';
 import {
   parsePdfMultiColumn,
-  parsePdfWithOpenDataLoader,
+  parsePdfWithLlamaParse,
   type ParsedChunk,
 } from '../services/pdfParserService.js';
 import {
@@ -37,10 +37,9 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-function shouldUseSidecar(parser: unknown): boolean {
+function shouldUseLlamaParse(parser: unknown): boolean {
   if (parser === 'local') return false;
-  if (parser === 'opendataloader') return true;
-  return Boolean(process.env.ODL_SIDECAR_URL);
+  return parser === 'llamaparse' || Boolean(process.env.LLAMA_CLOUD_API_KEY);
 }
 
 interface MappedChunk {
@@ -132,13 +131,13 @@ router.post(
 
       const filePath = path.join(uploadDir, req.file.filename);
       const fileBuffer = fs.readFileSync(filePath);
-      const useSidecar = shouldUseSidecar(req.query.parser);
+      const useLlamaParse = shouldUseLlamaParse(req.query.parser);
       const numColumns = req.query.columns
         ? parseInt(req.query.columns as string, 10)
         : undefined;
 
-      const parseResult = useSidecar
-        ? await parsePdfWithOpenDataLoader(fileBuffer, req.file.originalname)
+      const parseResult = useLlamaParse
+        ? await parsePdfWithLlamaParse(fileBuffer, req.file.originalname)
         : await parsePdfMultiColumn(
             fileBuffer,
             req.file.originalname,
@@ -298,14 +297,14 @@ router.post('/:id/chunk', async (req: AuthenticatedRequest, res, next) => {
         .json({ success: false, error: 'Physical file not found on disk.' });
     }
 
-    const useSidecar = shouldUseSidecar(req.body.parser);
+    const useLlamaParse = shouldUseLlamaParse(req.body.parser);
     const numColumns = req.body.numColumns
       ? Number(req.body.numColumns)
       : undefined;
 
     const fileBuffer = fs.readFileSync(filePath);
-    const spatialChunks = useSidecar
-      ? await parsePdfWithOpenDataLoader(fileBuffer, doc.originalName)
+    const spatialChunks = useLlamaParse
+      ? await parsePdfWithLlamaParse(fileBuffer, doc.originalName)
       : await parsePdfMultiColumn(fileBuffer, doc.originalName, numColumns);
 
     const formattedChunksForEmbedding = spatialChunks.chunks.map(

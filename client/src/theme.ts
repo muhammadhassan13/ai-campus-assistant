@@ -80,23 +80,19 @@ export const liquidGlass: Theme = {
     'linear-gradient(180deg, #F0F4FE 0%, #ECEEFB 45%, #F3ECF9 100%)',
   backdropElements: 'aurora',
 
-  // Glass surfaces — lower alpha again so the frost shows through
-  glassBase: 'rgba(255, 255, 255, 0.30)',
-  glassElevated: 'rgba(255, 255, 255, 0.40)',
-  glassStrong: 'rgba(255, 255, 255, 0.60)',
-  glassBorder: 'rgba(255, 255, 255, 0.60)',
-  glassBorderStrong: 'rgba(255, 255, 255, 0.80)',
+  glassBase: 'rgba(255, 255, 255, 0.55)',
+  glassElevated: 'rgba(255, 255, 255, 0.72)',
+  glassStrong: 'rgba(255, 255, 255, 0.85)',
+  glassBorder: 'rgba(255, 255, 255, 0.7)',
+  glassBorderStrong: 'rgba(255, 255, 255, 0.9)',
   glassSpecular: 'none',
-  glassShadow: '0 4px 20px rgba(31, 38, 71, 0.06)',
-  glassShadowStrong:
-    '0 12px 40px rgba(31, 38, 71, 0.10), 0 2px 6px rgba(31, 38, 71, 0.04)',
-  // Lower blur + higher saturate → frost texture visible, colors pop slightly
-  glassBlur: 'blur(20px) saturate(160%)',
+  glassShadow: '0 2px 8px rgba(31, 38, 71, 0.05)',
+  glassShadowStrong: '0 8px 24px rgba(31, 38, 71, 0.08)',
+  glassBlur: 'blur(20px)',
 
-  // Solid surfaces — tuned so text still reads but frost is visible
-  surface: 'rgba(255, 255, 255, 0.45)',
-  surfaceAlt: 'rgba(255, 255, 255, 0.28)',
-  surfaceOverlay: 'rgba(255, 255, 255, 0.65)',
+  surface: 'rgba(255, 255, 255, 0.65)',
+  surfaceAlt: 'rgba(255, 255, 255, 0.45)',
+  surfaceOverlay: 'rgba(255, 255, 255, 0.85)',
 
   textPrimary: '#1C1C1E',
   textSecondary: 'rgba(60, 60, 67, 0.62)',

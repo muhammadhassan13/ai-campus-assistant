@@ -53,26 +53,11 @@ interface PdfComparatorProps {
 
 const PDF_RENDER_WIDTH = 520;
 
-// ─── Tuned bbox warning thresholds ──────────────────────────────────────────
-// These are deliberately looser than before. LlamaParse legitimately returns
-// wide blocks for full-width paragraphs and multi-column regions that were
-// correctly merged during parsing. Flagging every such block as "approximate"
-// makes the UI untrustworthy. We now only warn when a bbox is genuinely
-// untrustworthy:
-//
-//   1. Width OR height exceeds 92% of the page (near-full-page spill).
-//   2. Long text with a suspiciously tiny bbox (definite mismatch).
-//   3. Tables whose bbox is under half the expected minimum height.
-//
-// Headings are exempt from the "partial" text-length check — they are short
-// by nature.
 const MAX_W_RATIO = 0.92;
 const MAX_H_RATIO = 0.92;
 const PARTIAL_TEXT_LEN = 1200;
 const PARTIAL_AREA_RATIO = 0.015;
 const TABLE_MIN_ROW_HEIGHT_RATIO = 0.018;
-
-// ─── Theme-aware highlight palettes ─────────────────────────────────────────
 
 interface HighlightPalette {
   yellowFill: string;
@@ -89,9 +74,7 @@ interface HighlightPalette {
   separator: string;
   separatorStrong: string;
   tableHeaderBg: string;
-  /** Backdrop for the whole comparison grid */
   gridBackground: string;
-  /** Panel backgrounds */
   paneBackground: string;
   paneBorder: string;
   paneShadow: string;
@@ -132,7 +115,6 @@ function getPalette(theme: Theme): HighlightPalette {
       mdPaperShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
     };
   }
-  // liquid-glass
   return {
     yellowFill: 'rgba(255, 159, 10, 0.35)',
     yellowBorder: '2px solid rgba(255, 159, 10, 1)',
@@ -150,13 +132,13 @@ function getPalette(theme: Theme): HighlightPalette {
     tableHeaderBg: 'rgba(60, 60, 67, 0.06)',
     gridBackground:
       'linear-gradient(180deg, #F0F4FE 0%, #ECEEFB 45%, #F3ECF9 100%)',
-    paneBackground: 'rgba(255, 255, 255, 0.55)',
+    paneBackground: 'rgba(255, 255, 255, 0.72)',
     paneBorder: '1px solid rgba(255, 255, 255, 0.7)',
-    paneShadow: '0 12px 40px rgba(31, 38, 71, 0.10)',
-    paneHeaderBg: 'rgba(255, 255, 255, 0.4)',
+    paneShadow: '0 8px 24px rgba(31, 38, 71, 0.08)',
+    paneHeaderBg: 'rgba(255, 255, 255, 0.5)',
     pdfScrollBg: '#E8ECF2',
-    mdScrollBg: 'rgba(255, 255, 255, 0.35)',
-    mdPaperBg: 'rgba(255, 255, 255, 0.8)',
+    mdScrollBg: 'rgba(255, 255, 255, 0.45)',
+    mdPaperBg: 'rgba(255, 255, 255, 0.85)',
     mdPaperBorder: '1px solid rgba(255, 255, 255, 0.7)',
     mdPaperShadow: '0 4px 16px rgba(31, 38, 71, 0.05)',
   };
@@ -172,12 +154,10 @@ function getBboxWarning(
   const wr = block.bbox.width / pageWidth;
   const hr = block.bbox.height / pageHeight;
 
-  // Only truly full-page spills are suspicious now.
   if (wr > MAX_W_RATIO || hr > MAX_H_RATIO) {
     return 'Approximate — bounding box spans multiple regions';
   }
 
-  // Skip the "partial" check for headings — short text is expected.
   if (block.type !== 'heading') {
     const textLen = (block.value || block.md || '').length;
     const areaRatio =
@@ -231,8 +211,6 @@ function findFallbackBlock(
   );
   return pool[0];
 }
-
-// ─── PDF Viewer ─────────────────────────────────────────────────────────────
 
 interface PdfViewerProps {
   pdfUrl?: string;
@@ -382,8 +360,6 @@ function PdfViewer({
     </Document>
   );
 }
-
-// ─── Main Comparator ────────────────────────────────────────────────────────
 
 export const PdfComparator: React.FC<PdfComparatorProps> = ({
   blocks = [],
@@ -686,8 +662,6 @@ export const PdfComparator: React.FC<PdfComparatorProps> = ({
   );
 };
 
-// ─── Style factories ────────────────────────────────────────────────────────
-
 const viewerStyles = {
   pdfPlaceholder: (p: HighlightPalette): React.CSSProperties => ({
     display: 'flex',
@@ -743,8 +717,6 @@ const comparatorStyles = {
     overflow: 'hidden',
     borderRadius: 20,
     background: p.paneBackground,
-    backdropFilter: 'blur(20px) saturate(160%)',
-    WebkitBackdropFilter: 'blur(20px) saturate(160%)',
     border: p.paneBorder,
     boxShadow: p.paneShadow,
   }),
@@ -756,8 +728,6 @@ const comparatorStyles = {
     overflow: 'hidden',
     borderRadius: 20,
     background: p.paneBackground,
-    backdropFilter: 'blur(20px) saturate(160%)',
-    WebkitBackdropFilter: 'blur(20px) saturate(160%)',
     border: p.paneBorder,
     boxShadow: p.paneShadow,
   }),
@@ -794,8 +764,6 @@ const comparatorStyles = {
     minHeight: '100%',
     color: p.textPrimary,
     background: p.mdPaperBg,
-    backdropFilter: 'blur(20px)',
-    WebkitBackdropFilter: 'blur(20px)',
     padding: 24,
     boxSizing: 'border-box',
     fontSize: 12,

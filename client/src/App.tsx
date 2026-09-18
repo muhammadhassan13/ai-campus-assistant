@@ -1125,8 +1125,6 @@ export default function App() {
               maxWidth: 380,
               padding: 32,
               background: theme.glassElevated,
-              backdropFilter: theme.glassBlur,
-              WebkitBackdropFilter: theme.glassBlur,
               border: `1px solid ${theme.glassBorder}`,
               borderRadius: theme.radiusXl,
               boxShadow: theme.glassShadowStrong,
@@ -1277,6 +1275,7 @@ export default function App() {
   return (
     <>
       <GlobalStyles />
+      <ThemeFade trigger={themeName} />
       {theme.backdropElements === 'aurora' ? (
         <LiquidBackdrop />
       ) : (
@@ -1330,8 +1329,6 @@ export default function App() {
             minHeight: 0,
             overflowY: 'auto',
             background: theme.glassElevated,
-            backdropFilter: theme.glassBlur,
-            WebkitBackdropFilter: theme.glassBlur,
             border: `1px solid ${theme.glassBorder}`,
             borderRadius: theme.radiusXl,
             boxShadow: theme.glassShadowStrong,
@@ -1438,7 +1435,7 @@ const inputStyle = (theme: Theme): React.CSSProperties => ({
   borderRadius: theme.radiusSm,
   border: `1px solid ${theme.separatorStrong}`,
   background:
-    theme.name === 'liquid-glass' ? 'rgba(255,255,255,0.6)' : theme.surfaceAlt,
+    theme.name === 'liquid-glass' ? 'rgba(255,255,255,0.7)' : theme.surfaceAlt,
   fontSize: 14,
   color: theme.textPrimary,
   outline: 'none',
@@ -1469,8 +1466,6 @@ const cardStyle = (theme: Theme): React.CSSProperties => ({
   display: 'flex',
   flexDirection: 'column',
   gap: 14,
-  backdropFilter: theme.name === 'liquid-glass' ? 'blur(20px)' : 'none',
-  WebkitBackdropFilter: theme.name === 'liquid-glass' ? 'blur(20px)' : 'none',
 });
 
 const cardLabelStyle = (theme: Theme): React.CSSProperties => ({
@@ -1888,7 +1883,7 @@ const PageDocuments: React.FC<PageDocsProps> = ({
                             style={{
                               background:
                                 theme.name === 'liquid-glass'
-                                  ? 'rgba(255,255,255,0.6)'
+                                  ? 'rgba(255,255,255,0.7)'
                                   : theme.surface,
                               border: `1px solid ${theme.separator}`,
                               borderRadius: theme.radiusSm,
