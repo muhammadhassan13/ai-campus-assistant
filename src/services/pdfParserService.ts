@@ -63,10 +63,91 @@ export interface DocumentLayout {
   maxColumns: number;
 }
 
-interface LlamaJobStatusResponse {
-  status: 'SUCCESS' | 'ERROR' | 'PENDING' | string;
-  [key: string]: unknown;
+const ODL_BASE_URL = process.env.ODL_SIDECAR_URL || 'http://localhost:8000';
+const ODL_TIMEOUT_MS = 10 * 60 * 1000;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OpenDataLoader sidecar parser (primary path)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function parsePdfWithOpenDataLoader(
+  fileBuffer: Buffer,
+  fileName: string,
+  maxChunkLength: number = 500
+): Promise<ParseResult> {
+  const formData = new FormData();
+  const blob = new Blob([new Uint8Array(fileBuffer)], {
+    type: 'application/pdf',
+  });
+  formData.append('file', blob, fileName);
+
+  let res;
+  try {
+    res = await axios.post(`${ODL_BASE_URL}/parse`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: ODL_TIMEOUT_MS,
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+    });
+  } catch (err) {
+    const msg = axios.isAxiosError(err)
+      ? err.response?.data?.detail || err.message
+      : String(err);
+    throw new Error(`OpenDataLoader sidecar request failed: ${msg}`);
+  }
+
+  const data = res.data as {
+    fullText: string;
+    blocks: MarkdownBlock[];
+    pageDimensions: { width: number; height: number } | null;
+  };
+
+  const fullText = typeof data.fullText === 'string' ? data.fullText : '';
+  const blocks = Array.isArray(data.blocks) ? data.blocks : [];
+
+  const uploadsDir = path.join(process.cwd(), 'uploads');
+  await fs.mkdir(uploadsDir, { recursive: true });
+  const mdFileName = `${path.parse(fileName).name}-${Date.now()}.md`;
+  const markdownFilePath = path.join(uploadsDir, mdFileName);
+  await fs.writeFile(markdownFilePath, fullText, 'utf-8');
+
+  const segments = splitTextWithOffsets(fullText, maxChunkLength);
+  const chunks: ParsedChunk[] = segments
+    .filter((seg) => seg.text && seg.text.trim().length > 0)
+    .map((seg, idx) => ({
+      chunkIndex: idx,
+      text: seg.text,
+      characterCount: seg.text.length,
+      startOffset: seg.startOffset,
+      endOffset: seg.endOffset,
+      nodeId: `block-${idx}`,
+    }));
+
+  const pageDimensions = data.pageDimensions
+    ? { width: data.pageDimensions.width, height: data.pageDimensions.height }
+    : undefined;
+
+  console.log(
+    '[OpenDataLoader] markdown length =',
+    fullText.length,
+    '| blocks =',
+    blocks.length,
+    '| chunks =',
+    chunks.length
+  );
+
+  return {
+    fullText,
+    markdownFilePath,
+    chunks,
+    blocks,
+    pageDimensions,
+  };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Local pdfjs parser (fallback path — no sidecar required)
+// ─────────────────────────────────────────────────────────────────────────────
 
 export async function parsePdfMultiColumn(
   buffer: Buffer,
@@ -170,198 +251,9 @@ export async function parsePdfMultiColumn(
   };
 }
 
-export async function parsePdfWithLlamaParse(
-  fileBuffer: Buffer,
-  fileName: string,
-  maxChunkLength: number = 500
-): Promise<ParseResult> {
-  const apiKey = process.env.LLAMA_CLOUD_API_KEY;
-  if (!apiKey) throw new Error('LLAMA_CLOUD_API_KEY is not set');
-
-  const layout = await inspectPdfLayout(fileBuffer);
-
-  const formData = new FormData();
-  const blob = new Blob([new Uint8Array(fileBuffer)], {
-    type: 'application/pdf',
-  });
-  formData.append('file', blob, fileName);
-
-  // Use auto_mode instead of premium_mode — auto_mode respects
-  // multi-column layouts better and produces tighter bboxes.
-  formData.append('auto_mode', 'true');
-  formData.append('high_res_ocr', 'true');
-  formData.append('adaptive_long_table', 'true');
-  formData.append('outlined_table_extraction', 'true');
-
-  formData.append(
-    'parsing_instruction',
-    `First inspect the document and determine its reading order, page layout, number of text columns, headings, lists, and tables. This document was detected with approximately ${layout.maxColumns} column(s) across ${layout.pageCount} page(s), but layouts may vary by page. Preserve the detected structure; do not impose columns where none exist and do not merge text across column gutters. Convert the result to clean Markdown, using GFM tables only for actual tables and preserving headings, lists, paragraphs, and section order.
-
-IMPORTANT: This document may contain both English and Arabic text. Please OCR Arabic text as actual Arabic characters — do NOT substitute descriptions like "Arabic text describing..." or "logo: <text>". If a region is a pure image or logo with no readable text, omit it entirely rather than describing it.`
-  );
-
-  const uploadRes = await axios.post(
-    'https://api.cloud.llamaindex.ai/api/v1/parsing/upload',
-    formData,
-    { headers: { Authorization: `Bearer ${apiKey}` } }
-  );
-
-  const jobId = uploadRes.data.id;
-
-  let result: LlamaJobStatusResponse | null = null;
-  while (!result) {
-    await new Promise((r) => setTimeout(r, 2000));
-    const statusRes = await axios.get<LlamaJobStatusResponse>(
-      `https://api.cloud.llamaindex.ai/api/v1/parsing/job/${jobId}`,
-      { headers: { Authorization: `Bearer ${apiKey}` } }
-    );
-    if (statusRes.data.status === 'SUCCESS') {
-      result = statusRes.data;
-    } else if (statusRes.data.status === 'ERROR') {
-      throw new Error('LlamaParse job failed');
-    }
-  }
-
-  const jsonRes = await axios.get(
-    `https://api.cloud.llamaindex.ai/api/v1/parsing/job/${jobId}/result/json`,
-    { headers: { Authorization: `Bearer ${apiKey}` } }
-  );
-
-  const structured = jsonRes.data as {
-    markdown?: string;
-    text?: string;
-    pages?: Array<{
-      page?: number;
-      width?: number;
-      height?: number;
-      items?: Array<Record<string, unknown>>;
-    }>;
-  };
-
-  const blocks: MarkdownBlock[] = [];
-  let pageWidth = 0;
-  let pageHeight = 0;
-
-  const pages = Array.isArray(structured.pages) ? structured.pages : [];
-
-  pages.forEach((page, pageIdx) => {
-    if (page.width) pageWidth = page.width;
-    if (page.height) pageHeight = page.height;
-    const pageNum = page.page ?? pageIdx + 1;
-    const items = page.items || [];
-
-    items.forEach((it, itemIdx) => {
-      const raw = it as {
-        type?: string;
-        md?: string;
-        value?: string;
-        lvl?: number;
-        rows?: string[][];
-        html?: string;
-        bBox?: { x: number; y: number; w: number; h: number };
-      };
-
-      if (!raw.bBox) return;
-      if (!raw.md && !raw.value) return;
-
-      const type = (raw.type || 'text') as MarkdownBlock['type'];
-      if (type !== 'text' && type !== 'heading' && type !== 'table') return;
-
-      blocks.push({
-        id: `p${pageNum}_i${itemIdx}`,
-        type,
-        md: raw.md || raw.value || '',
-        value: raw.value || raw.md || '',
-        pageNumber: pageNum,
-        bbox: {
-          x: raw.bBox.x,
-          y: raw.bBox.y,
-          width: raw.bBox.w,
-          height: raw.bBox.h,
-        },
-        level: raw.lvl,
-        rows: raw.rows,
-        html: raw.html,
-      });
-    });
-  });
-
-  let markdownText: string = structured.markdown || structured.text || '';
-
-  if (!markdownText && blocks.length > 0) {
-    markdownText = blocks
-      .map((b) => b.md || b.value)
-      .filter((s) => s && s.trim().length > 0)
-      .join('\n\n');
-    console.log('[LlamaParse] reconstructed markdown from blocks');
-  }
-
-  console.log(
-    '[LlamaParse] markdown length =',
-    markdownText.length,
-    '| blocks =',
-    blocks.length
-  );
-
-  const uploadsDir = path.join(process.cwd(), 'uploads');
-  await fs.mkdir(uploadsDir, { recursive: true });
-  const mdFileName = `${path.parse(fileName).name}-${Date.now()}.md`;
-  const markdownFilePath = path.join(uploadsDir, mdFileName);
-  await fs.writeFile(markdownFilePath, markdownText, 'utf-8');
-
-  let segments = splitTextWithOffsets(markdownText, maxChunkLength);
-
-  if (segments.length === 0 && blocks.length > 0) {
-    console.log('[LlamaParse] falling back to per-block chunking');
-    segments = blocks.map((b, i) => ({
-      text: b.md || b.value,
-      startOffset: i,
-      endOffset: i + 1,
-    }));
-  }
-
-  const chunks: ParsedChunk[] = segments
-    .filter((seg) => seg.text && seg.text.trim().length > 0)
-    .map((seg, idx) => ({
-      chunkIndex: idx,
-      text: seg.text,
-      characterCount: seg.text.length,
-      startOffset: seg.startOffset,
-      endOffset: seg.endOffset,
-      nodeId: `block-${idx}`,
-    }));
-
-  console.log('[LlamaParse] produced chunks:', chunks.length);
-
-  return {
-    fullText: markdownText,
-    markdownFilePath,
-    chunks,
-    layout,
-    blocks,
-    pageDimensions: { width: pageWidth, height: pageHeight },
-  };
-}
-
-async function inspectPdfLayout(buffer: Buffer): Promise<DocumentLayout> {
-  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
-  const pdfDocument = await loadingTask.promise;
-  const columnCounts: number[] = [];
-
-  for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
-    const page = await pdfDocument.getPage(pageNum);
-    const viewport = page.getViewport({ scale: 1.0 });
-    const textContent = await page.getTextContent();
-    const items = toTextItems(textContent.items as unknown[]);
-    columnCounts.push(detectColumnCount(items, viewport.width));
-  }
-
-  return {
-    pageCount: pdfDocument.numPages,
-    columnCounts,
-    maxColumns: Math.max(1, ...columnCounts),
-  };
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
 function toTextItems(items: unknown[]): TextItem[] {
   return items

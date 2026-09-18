@@ -6,7 +6,38 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import 'katex/dist/katex.min.css';
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
 import PdfComparator, { type MarkdownBlock } from './PdfComparator';
+import { useTheme } from './useTheme';
+import type { Theme } from './theme';
+import LiquidBackdrop from './LiquidBackdrop';
+import Sidebar, { type NavPage } from './Sidebar';
+import GlobalStyles from './GlobalStyles';
+import ThemeFade from './ThemeFade';
+import Spinner from './Spinner';
+import {
+  IconUpload,
+  IconZap,
+  IconTrash,
+  IconRefresh,
+  IconPlay,
+  IconPause,
+  IconMic,
+  IconStop,
+  IconSend,
+  IconChevronDown,
+  IconChevronUp,
+  IconSun,
+  IconMoon,
+  IconScan,
+} from './icons';
+
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url
+).toString();
 
 interface ApiError {
   error?: string;
@@ -54,6 +85,8 @@ interface ChatMessage {
 }
 
 export default function App() {
+  const { theme, themeName, toggleTheme } = useTheme();
+
   const comparisonDocumentId = new URLSearchParams(window.location.search).get(
     'comparison'
   );
@@ -63,7 +96,7 @@ export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const [activeNavPage, setActiveNavPage] = useState<1 | 2 | 3 | 4>(1);
+  const [activeNavPage, setActiveNavPage] = useState<NavPage>(1);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [docList, setDocList] = useState<UploadedDoc[]>([]);
@@ -74,7 +107,6 @@ export default function App() {
   const [docSuccessMsg, setDocSuccessMsg] = useState('');
   const [expandedDocId, setExpandedDocId] = useState<string | null>(null);
 
-  // State for Visual Inspector / PdfComparator
   const [selectedInspectorDocId] = useState<string>(comparisonDocumentId ?? '');
   const [markdownContent, setMarkdownContent] = useState<string>('');
   const [comparisonBlocks, setComparisonBlocks] = useState<MarkdownBlock[]>([]);
@@ -99,6 +131,7 @@ export default function App() {
   const [ragChatLog, setRagChatLog] = useState<ChatMessage[]>([]);
   const [ragChatLoading, setRagChatLoading] = useState(false);
   const [selectedDocScope, setSelectedDocScope] = useState<string[]>([]);
+  const [scopeExpanded, setScopeExpanded] = useState(false);
 
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -121,7 +154,6 @@ export default function App() {
     window.open(comparisonUrl, '_blank', 'noopener,noreferrer');
   };
 
-  // Global 401 handler — signs the user out if the token is bad/expired
   useEffect(() => {
     const interceptor = axios.interceptors.response.use(
       (response) => response,
@@ -143,7 +175,6 @@ export default function App() {
     };
   }, [comparisonDocumentId]);
 
-  // Fetch the saved Markdown file when a document is selected in the inspector
   useEffect(() => {
     if (!selectedInspectorDocId || !token || comparisonDocumentId) {
       setMarkdownContent('');
@@ -199,6 +230,7 @@ export default function App() {
   }, [comparisonDocumentId, token]);
 
   useEffect(() => {
+    if (themeName !== 'deep-space') return;
     const canvas = document.getElementById('spaceCanvas') as HTMLCanvasElement;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -292,7 +324,7 @@ export default function App() {
       window.removeEventListener('resize', resize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, []);
+  }, [themeName]);
 
   useEffect(() => {
     if (!('speechSynthesis' in window)) return;
@@ -1008,1564 +1040,1934 @@ export default function App() {
     );
   };
 
+  // ─── Comparison window ───────────────────────────────────────────────────────
   if (comparisonDocumentId) {
     return (
-      <main
-        style={{
-          position: 'fixed',
-          inset: 0,
-          height: '100vh',
-          width: '100vw',
-          overflow: 'hidden',
-          background: '#0F172A',
-          padding: 0,
-          boxSizing: 'border-box',
-        }}
-      >
-        {comparisonLoading ? (
-          <p style={{ color: '#CBD5E1', padding: '24px' }}>
-            Loading document comparison...
-          </p>
-        ) : comparisonError ? (
-          <p style={{ color: '#FCA5A5', padding: '24px' }}>{comparisonError}</p>
-        ) : (
-          <PdfComparator
-            markdownContent={markdownContent}
-            blocks={comparisonBlocks}
-            pageWidth={pageWidth}
-            pageHeight={pageHeight}
-            pdfUrl={
-              pdfFilename
-                ? `http://localhost:3001/uploads/${pdfFilename}`
-                : undefined
-            }
-          />
-        )}
-      </main>
+      <>
+        <GlobalStyles />
+        <main
+          style={{
+            position: 'fixed',
+            inset: 0,
+            height: '100vh',
+            width: '100vw',
+            overflow: 'hidden',
+            background: '#F5F6F8',
+            padding: 0,
+            boxSizing: 'border-box',
+          }}
+        >
+          {comparisonLoading ? (
+            <p style={{ color: '#1C1C1E', padding: '24px' }}>
+              Loading document comparison...
+            </p>
+          ) : comparisonError ? (
+            <p style={{ color: '#FF3B30', padding: '24px' }}>
+              {comparisonError}
+            </p>
+          ) : (
+            <PdfComparator
+              markdownContent={markdownContent}
+              blocks={comparisonBlocks}
+              pageWidth={pageWidth}
+              pageHeight={pageHeight}
+              pdfUrl={
+                pdfFilename
+                  ? `http://localhost:3001/uploads/${pdfFilename}`
+                  : undefined
+              }
+            />
+          )}
+        </main>
+      </>
     );
   }
 
-  return (
-    <div style={styles.pageBackground}>
-      <canvas id="spaceCanvas" style={styles.canvasBackground}></canvas>
-      <style>{`
-        ::-webkit-scrollbar {
-          width: 5px;
-          height: 5px;
-          background: transparent;
-        }
-        ::-webkit-scrollbar-track {
-          background: transparent;
-          margin: 0px;
-        }
-        ::-webkit-scrollbar-thumb {
-          background: rgba(148, 163, 184, 0.3);
-          border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-          background: rgba(148, 163, 184, 0.5);
-        }
-        ::-webkit-scrollbar-button {
-          display: none !important;
-          width: 0px;
-          height: 0px;
-          background: transparent;
-        }
-        * {
-          scrollbar-width: thin;
-          scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
-        }
-      `}</style>
-
-      <div style={styles.container}>
-        <header style={styles.topHeader}>
-          <div style={styles.brandHeader}>
-            <div style={styles.brandLogo}>✨</div>
-            <div>
-              <h1 style={styles.title}>Campus.AI</h1>
-              <p style={styles.subtitle}>Workspace v2.3</p>
-            </div>
-          </div>
-          {token && (
-            <nav style={styles.navBar}>
-              {[
-                { id: 1, label: `Documents (${docList.length})` },
-                { id: 2, label: 'General AI Chat' },
-                { id: 3, label: 'RAG & Voice Chat' },
-                { id: 4, label: 'Visual Inspector' },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  style={
-                    activeNavPage === tab.id
-                      ? styles.activeNavBtn
-                      : styles.inactiveNavBtn
-                  }
-                  onClick={() => setActiveNavPage(tab.id as 1 | 2 | 3 | 4)}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
-          )}
-          {token && (
-            <button
-              style={styles.signOutBtn}
-              onClick={() => {
-                stopCurrentSpeech();
-                localStorage.removeItem('jwt_token');
-                setToken('');
+  // ─── Login screen ───────────────────────────────────────────────────────────
+  if (!token) {
+    return (
+      <>
+        <GlobalStyles />
+        <ThemeFade trigger={themeName} />
+        {theme.backdropElements === 'aurora' ? (
+          <LiquidBackdrop />
+        ) : (
+          <canvas id="spaceCanvas" style={backgroundCanvasStyle} />
+        )}
+        <div
+          aria-hidden
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9998,
+            pointerEvents: 'none',
+            opacity: 0.03,
+            mixBlendMode: 'overlay',
+            backgroundImage:
+              "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E\")",
+          }}
+        />
+        <div
+          style={{
+            position: 'relative',
+            zIndex: 1,
+            minHeight: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 24,
+            fontFamily: theme.fontSans,
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 380,
+              padding: 32,
+              background: theme.glassElevated,
+              backdropFilter: theme.glassBlur,
+              WebkitBackdropFilter: theme.glassBlur,
+              border: `1px solid ${theme.glassBorder}`,
+              borderRadius: theme.radiusXl,
+              boxShadow: theme.glassShadowStrong,
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                marginBottom: 24,
               }}
             >
-              Sign Out
-            </button>
-          )}
-        </header>
-
-        <main style={styles.mainContentArea}>
-          {!token ? (
-            <div style={styles.authWrapper}>
-              <div style={styles.authCard}>
-                <div style={styles.authHeader}>
-                  <div style={styles.brandLogoLarge}>✨</div>
-                  <h2 style={styles.authTitle}>Welcome Back</h2>
-                  <p style={styles.authSubtitle}>
-                    Sign in to access your study companion
-                  </p>
-                </div>
-                <form onSubmit={handleLogin} style={styles.formStack}>
-                  <div style={styles.inputFieldWrapper}>
-                    <label style={styles.inputLabel}>Email Address</label>
-                    <input
-                      type="email"
-                      placeholder="student@university.edu"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      style={styles.input}
-                      required
-                    />
-                  </div>
-                  <div style={styles.inputFieldWrapper}>
-                    <label style={styles.inputLabel}>Password</label>
-                    <input
-                      type="password"
-                      placeholder="••••••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      style={styles.input}
-                      required
-                    />
-                  </div>
-                  <button type="submit" style={styles.primaryButtonLarge}>
-                    Sign In
-                  </button>
-                </form>
+              <div
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 18,
+                  background: theme.accentGradient,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 16,
+                  boxShadow: `0 8px 24px ${theme.accentSoft}`,
+                }}
+              >
+                <svg
+                  width={26}
+                  height={26}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#FFFFFF"
+                  strokeWidth={2.2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.8 2.8M14.9 14.9l2.8 2.8M6.3 17.7l2.8-2.8M14.9 9.1l2.8-2.8" />
+                </svg>
               </div>
+              <h2
+                style={{
+                  color: theme.textPrimary,
+                  fontSize: 22,
+                  fontWeight: 700,
+                  margin: '0 0 4px 0',
+                  letterSpacing: '-0.3px',
+                }}
+              >
+                Welcome back
+              </h2>
+              <p
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: 13,
+                  margin: 0,
+                }}
+              >
+                Sign in to your workspace
+              </p>
             </div>
-          ) : (
-            <div>
-              {activeNavPage === 1 && (
-                <div style={styles.pageSection}>
-                  <div style={styles.sectionHeadingRow}>
-                    <h2 style={styles.pageTitle}>Documents & Knowledge Hub</h2>
-                    <p style={styles.pageDesc}>
-                      Upload PDF files, ingest vector embeddings, preview text
-                      chunks, and manage storage.
-                    </p>
-                  </div>
+            <form
+              onSubmit={handleLogin}
+              style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
+            >
+              <div>
+                <label
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: theme.textSecondary,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    display: 'block',
+                    marginBottom: 6,
+                  }}
+                >
+                  Email
+                </label>
+                <input
+                  type="email"
+                  placeholder="student@university.edu"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  style={inputStyle(theme)}
+                  required
+                />
+              </div>
+              <div>
+                <label
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: theme.textSecondary,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    display: 'block',
+                    marginBottom: 6,
+                  }}
+                >
+                  Password
+                </label>
+                <input
+                  type="password"
+                  placeholder="••••••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  style={inputStyle(theme)}
+                  required
+                />
+              </div>
+              <button type="submit" style={primaryButtonStyle(theme)}>
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={toggleTheme}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: theme.textSecondary,
+                  fontSize: 12,
+                  padding: 8,
+                  marginTop: 4,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  fontFamily: theme.fontSans,
+                }}
+              >
+                {themeName === 'liquid-glass' ? (
+                  <IconMoon size={14} color={theme.textSecondary} />
+                ) : (
+                  <IconSun size={14} color={theme.textSecondary} />
+                )}
+                Switch to{' '}
+                {themeName === 'liquid-glass' ? 'Deep Space' : 'Liquid Glass'}
+              </button>
+            </form>
+          </div>
+        </div>
+      </>
+    );
+  }
 
-                  <div style={styles.uploadCard}>
-                    <h3 style={styles.cardSectionTitle}>Upload New Document</h3>
-                    <div style={styles.uploadRow}>
-                      <label style={styles.fileDropZone}>
-                        <span style={styles.fileDropText}>
-                          {selectedFile
-                            ? `📄 ${selectedFile.name}`
-                            : '📄 Choose PDF Document'}
-                        </span>
-                        <input
-                          type="file"
-                          accept=".pdf"
-                          onChange={(e) =>
-                            setSelectedFile(e.target.files?.[0] || null)
-                          }
-                          disabled={uploadingDoc}
-                          style={{ display: 'none' }}
-                        />
-                      </label>
-                      <button
-                        onClick={handleDocUpload}
-                        disabled={!selectedFile || uploadingDoc}
-                        style={
-                          !selectedFile || uploadingDoc
-                            ? styles.disabledButton
-                            : styles.primaryButton
-                        }
-                      >
-                        {uploadingDoc ? 'Uploading...' : 'Upload File'}
-                      </button>
-                    </div>
-                    {docSuccessMsg && (
-                      <p style={styles.successText}>{docSuccessMsg}</p>
-                    )}
-                  </div>
+  // ─── Main app ───────────────────────────────────────────────────────────────
+  return (
+    <>
+      <GlobalStyles />
+      {theme.backdropElements === 'aurora' ? (
+        <LiquidBackdrop />
+      ) : (
+        <canvas id="spaceCanvas" style={backgroundCanvasStyle} />
+      )}
 
-                  <div style={styles.documentsContainer}>
-                    <h3 style={styles.cardSectionTitle}>
-                      Indexed Documents Directory
-                    </h3>
-                    {docList.length === 0 ? (
-                      <div style={styles.emptyStateBox}>
-                        <p style={styles.emptyFilesText}>
-                          No documents uploaded yet. Upload a PDF above to get
-                          started.
-                        </p>
-                      </div>
-                    ) : (
-                      <div style={styles.docListStack}>
-                        {docList.map((doc) => {
-                          const isChunked = doc.totalChunks > 0;
-                          const isExpanded = expandedDocId === doc.documentId;
-                          return (
-                            <div
-                              key={doc.documentId}
-                              style={styles.docItemCard}
-                            >
-                              <div style={styles.docMainInfoRow}>
-                                <div style={styles.docMetaCol}>
-                                  <span style={styles.docNameText}>
-                                    📄 {doc.originalName}
-                                  </span>
-                                  <div style={styles.badgeRow}>
-                                    <span
-                                      style={
-                                        isChunked
-                                          ? styles.statusBadgeChunked
-                                          : styles.statusBadgeStaged
-                                      }
-                                    >
-                                      {isChunked
-                                        ? `⚡ Ingested (${doc.totalChunks} chunks)`
-                                        : '📄 Staged (Unchunked)'}
-                                    </span>
-                                    <span style={styles.metaSubText}>
-                                      Size: {(doc.fileSize / 1024).toFixed(1)}{' '}
-                                      KB | Chars: {doc.characterCount}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div style={styles.docActionRow}>
-                                  {!isChunked ? (
-                                    <button
-                                      onClick={() =>
-                                        handleChunkDoc(doc.documentId)
-                                      }
-                                      disabled={
-                                        chunkingDocId === doc.documentId
-                                      }
-                                      style={styles.primaryButton}
-                                    >
-                                      {chunkingDocId === doc.documentId
-                                        ? 'Processing...'
-                                        : '⚡ Ingest Vectors'}
-                                    </button>
-                                  ) : (
-                                    <>
-                                      <button
-                                        onClick={() =>
-                                          setExpandedDocId(
-                                            isExpanded ? null : doc.documentId
-                                          )
-                                        }
-                                        style={styles.secondaryButtonSmall}
-                                      >
-                                        {isExpanded
-                                          ? 'Hide Chunks 🔼'
-                                          : 'Preview Chunks 🔽'}
-                                      </button>
-                                      <button
-                                        onClick={() =>
-                                          handleUnchunkDoc(doc.documentId)
-                                        }
-                                        disabled={
-                                          unchunkingDocId === doc.documentId
-                                        }
-                                        style={styles.warningButtonSmall}
-                                      >
-                                        {unchunkingDocId === doc.documentId
-                                          ? 'Processing...'
-                                          : '🔁 Purge Vectors'}
-                                      </button>
-                                    </>
-                                  )}
-                                  <button
-                                    onClick={() =>
-                                      handleDeleteDoc(
-                                        doc.documentId,
-                                        doc.originalName
-                                      )
-                                    }
-                                    disabled={deletingDocId === doc.documentId}
-                                    style={styles.dangerButtonSmall}
-                                    title="Delete document from app, uploads folder, and MongoDB"
-                                  >
-                                    {deletingDocId === doc.documentId
-                                      ? 'Deleting...'
-                                      : '🗑️ Delete'}
-                                  </button>
-                                </div>
-                              </div>
+      <div
+        aria-hidden
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9998,
+          pointerEvents: 'none',
+          opacity: 0.03,
+          mixBlendMode: 'overlay',
+          backgroundImage:
+            "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E\")",
+        }}
+      />
 
-                              {isExpanded && isChunked && (
-                                <div style={styles.chunkPreviewBox}>
-                                  <div style={styles.mongoServerHeader}>
-                                    <span>
-                                      MongoDB Document Server Record View
-                                    </span>
-                                    <span style={{ color: '#818CF8' }}>
-                                      Filename: {doc.filename}
-                                    </span>
-                                  </div>
-                                  <div style={styles.chunksGrid}>
-                                    {doc.chunks.map((chunk) => (
-                                      <div
-                                        key={chunk.chunkIndex}
-                                        style={styles.chunkCard}
-                                      >
-                                        <div style={styles.chunkCardHeader}>
-                                          <span>
-                                            Chunk Index #{chunk.chunkIndex}
-                                          </span>
-                                          <span>
-                                            {chunk.characterCount} chars |
-                                            Vector Dim: {chunk.vectorDimensions}
-                                          </span>
-                                        </div>
-                                        <p style={styles.chunkTextSnippet}>
-                                          {chunk.text}
-                                        </p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          display: 'flex',
+          gap: 16,
+          padding: 16,
+          boxSizing: 'border-box',
+          fontFamily: theme.fontSans,
+          zIndex: 1,
+        }}
+      >
+        <Sidebar
+          theme={theme}
+          activePage={activeNavPage}
+          onNavigate={setActiveNavPage}
+          documentCount={docList.length}
+          onToggleTheme={toggleTheme}
+          onSignOut={() => {
+            stopCurrentSpeech();
+            localStorage.removeItem('jwt_token');
+            setToken('');
+          }}
+        />
 
-              {activeNavPage === 2 && (
-                <div style={styles.pageSection}>
-                  <div style={styles.sectionHeadingRow}>
-                    <h2 style={styles.pageTitle}>General AI Study Chat</h2>
-                    <p style={styles.pageDesc}>
-                      Conversational chatbot for general topics, coding
-                      assistance, and coursework explanations.
-                    </p>
-                  </div>
-                  <div style={styles.chatLogContainer}>
-                    {generalChatLog.length === 0 ? (
-                      <div style={styles.emptyState}>
-                        <div style={styles.emptyStateIcon}>💬</div>
-                        <h4 style={styles.emptyStateTitle}>
-                          Start a conversation
-                        </h4>
-                        <p style={styles.emptyStateDesc}>
-                          Ask questions about programming, algorithms, math, or
-                          notes.
-                        </p>
-                      </div>
-                    ) : (
-                      generalChatLog.map((m) => (
-                        <div
-                          key={m.id}
-                          style={
-                            m.sender === 'User'
-                              ? styles.userBubble
-                              : styles.aiBubbleFull
-                          }
-                        >
-                          <span style={styles.bubbleSender}>
-                            {m.sender === 'User' ? 'You' : 'Campus AI'}
-                          </span>
-                          <div style={styles.markdownContent}>
-                            <ReactMarkdown
-                              remarkPlugins={[remarkGfm, remarkMath]}
-                              rehypePlugins={[rehypeRaw, rehypeKatex]}
-                              components={{
-                                table: ({ children }) => (
-                                  <div
-                                    style={{
-                                      overflowX: 'auto',
-                                      margin: '8px 0',
-                                    }}
-                                  >
-                                    <table
-                                      style={{
-                                        width: '100%',
-                                        borderCollapse: 'collapse',
-                                        fontSize: '12px',
-                                      }}
-                                    >
-                                      {children}
-                                    </table>
-                                  </div>
-                                ),
-                                th: ({ children }) => (
-                                  <th
-                                    style={{
-                                      border:
-                                        '1px solid rgba(255, 255, 255, 0.15)',
-                                      padding: '5px 8px',
-                                      backgroundColor: '#0F172A',
-                                      textAlign: 'left',
-                                    }}
-                                  >
-                                    {children}
-                                  </th>
-                                ),
-                                td: ({ children }) => (
-                                  <td
-                                    style={{
-                                      border:
-                                        '1px solid rgba(255, 255, 255, 0.1)',
-                                      padding: '5px 8px',
-                                    }}
-                                  >
-                                    {children}
-                                  </td>
-                                ),
-                              }}
-                            >
-                              {m.text}
-                            </ReactMarkdown>
-                          </div>
+        <main
+          style={{
+            flex: 1,
+            minWidth: 0,
+            height: '100%',
+            minHeight: 0,
+            overflowY: 'auto',
+            background: theme.glassElevated,
+            backdropFilter: theme.glassBlur,
+            WebkitBackdropFilter: theme.glassBlur,
+            border: `1px solid ${theme.glassBorder}`,
+            borderRadius: theme.radiusXl,
+            boxShadow: theme.glassShadowStrong,
+            padding: 32,
+            boxSizing: 'border-box',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          {activeNavPage === 1 && (
+            <PageDocuments
+              theme={theme}
+              docList={docList}
+              selectedFile={selectedFile}
+              setSelectedFile={setSelectedFile}
+              uploadingDoc={uploadingDoc}
+              handleDocUpload={handleDocUpload}
+              docSuccessMsg={docSuccessMsg}
+              expandedDocId={expandedDocId}
+              setExpandedDocId={setExpandedDocId}
+              chunkingDocId={chunkingDocId}
+              unchunkingDocId={unchunkingDocId}
+              deletingDocId={deletingDocId}
+              handleChunkDoc={handleChunkDoc}
+              handleUnchunkDoc={handleUnchunkDoc}
+              handleDeleteDoc={handleDeleteDoc}
+            />
+          )}
 
-                          {m.sender === 'AI' && (
-                            <div style={styles.messageAudioBar}>
-                              <button
-                                onClick={() =>
-                                  toggleMessageAudio(m, setGeneralChatLog)
-                                }
-                                style={styles.audioBarPlayBtn}
-                                title={m.isPlaying ? 'Pause' : 'Play'}
-                              >
-                                {m.isPlaying ? (
-                                  <svg
-                                    viewBox="0 0 24 24"
-                                    width="11"
-                                    height="11"
-                                    fill="currentColor"
-                                  >
-                                    <rect
-                                      x="5"
-                                      y="4"
-                                      width="4"
-                                      height="16"
-                                      rx="1"
-                                    />
-                                    <rect
-                                      x="15"
-                                      y="4"
-                                      width="4"
-                                      height="16"
-                                      rx="1"
-                                    />
-                                  </svg>
-                                ) : (
-                                  <svg
-                                    viewBox="0 0 24 24"
-                                    width="11"
-                                    height="11"
-                                    fill="currentColor"
-                                  >
-                                    <polygon points="5,3 19,12 5,21" />
-                                  </svg>
-                                )}
-                              </button>
-                              <div
-                                style={styles.audioBarTrackWrapper}
-                                onClick={(e) =>
-                                  handleAudioProgressBarClick(
-                                    e,
-                                    m,
-                                    setGeneralChatLog
-                                  )
-                                }
-                              >
-                                <div
-                                  style={{
-                                    ...styles.audioBarFill,
-                                    width: `${m.progress || 0}%`,
-                                  }}
-                                />
-                              </div>
-                              <span style={styles.audioBarDuration}>
-                                {m.currentTimeFormatted || '0:00'} /{' '}
-                                {m.durationFormatted || '0:00'}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    )}
-                    {generalChatLoading && (
-                      <div style={styles.aiBubbleFull}>
-                        <span style={styles.bubbleSender}>Campus AI</span>
-                        <div style={styles.typingIndicator}>
-                          <span>.</span>
-                          <span>.</span>
-                          <span>.</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+          {activeNavPage === 2 && (
+            <PageGeneralChat
+              theme={theme}
+              log={generalChatLog}
+              loading={generalChatLoading}
+              input={generalChatInput}
+              setInput={setGeneralChatInput}
+              onSend={sendGeneralChatMessage}
+              isRecording={isGeneralRecording}
+              onStartRecording={startGeneralRecording}
+              onStopRecording={stopGeneralRecording}
+              processingVoice={processingGeneralVoice}
+              onToggleAudio={(msg) =>
+                toggleMessageAudio(msg, setGeneralChatLog)
+              }
+              onSeek={(e, msg) =>
+                handleAudioProgressBarClick(e, msg, setGeneralChatLog)
+              }
+            />
+          )}
 
-                  <div style={styles.ragInputBarContainer}>
-                    <input
-                      style={styles.input}
-                      value={generalChatInput}
-                      onChange={(e) => setGeneralChatInput(e.target.value)}
-                      placeholder={
-                        processingGeneralVoice
-                          ? 'Transcribing voice prompt...'
-                          : 'Type your message or record voice...'
-                      }
-                      disabled={processingGeneralVoice}
-                      onKeyDown={(e) =>
-                        e.key === 'Enter' && sendGeneralChatMessage()
-                      }
-                    />
+          {activeNavPage === 3 && (
+            <PageRagChat
+              theme={theme}
+              log={ragChatLog}
+              loading={ragChatLoading}
+              input={ragChatInput}
+              setInput={setRagChatInput}
+              onSend={sendRagChatMessage}
+              isRecording={isRecording}
+              onStartRecording={startRecording}
+              onStopRecording={stopRecording}
+              processingVoice={processingVoice}
+              onToggleAudio={(msg) => toggleMessageAudio(msg, setRagChatLog)}
+              onSeek={(e, msg) =>
+                handleAudioProgressBarClick(e, msg, setRagChatLog)
+              }
+              docList={docList}
+              selectedScope={selectedDocScope}
+              onToggleScope={toggleScopeDoc}
+              onClearScope={() => setSelectedDocScope([])}
+              scopeExpanded={scopeExpanded}
+              onToggleScopeExpanded={() => setScopeExpanded((v) => !v)}
+            />
+          )}
 
-                    {!isGeneralRecording ? (
-                      <button
-                        onClick={startGeneralRecording}
-                        disabled={processingGeneralVoice}
-                        style={styles.voiceIconButton}
-                        title="Record Voice Prompt"
-                      >
-                        🎙️
-                      </button>
-                    ) : (
-                      <button
-                        onClick={stopGeneralRecording}
-                        style={styles.voiceRecordingActiveBtn}
-                        title="Stop Recording"
-                      >
-                        ⏹️
-                      </button>
-                    )}
-
-                    <button
-                      onClick={sendGeneralChatMessage}
-                      disabled={generalChatLoading || !generalChatInput.trim()}
-                      style={
-                        generalChatLoading || !generalChatInput.trim()
-                          ? styles.disabledButton
-                          : styles.primaryButton
-                      }
-                    >
-                      Send →
-                    </button>
-                  </div>
-                  {isGeneralRecording && (
-                    <p style={styles.recordingIndicator}>
-                      🔴 Listening to microphone... Click stop when finished.
-                    </p>
-                  )}
-                  {processingGeneralVoice && (
-                    <p style={styles.processingIndicator}>
-                      ⏳ Transcribing voice audio into text bar...
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {activeNavPage === 3 && (
-                <div style={styles.pageSection}>
-                  <div style={styles.sectionHeadingRow}>
-                    <h2 style={styles.pageTitle}>
-                      Document Knowledge & Voice Assistant
-                    </h2>
-                    <p style={styles.pageDesc}>
-                      Select specific ingested documents or query across all
-                      files using text chat or real-time voice recording.
-                    </p>
-                  </div>
-
-                  <div style={styles.docSelectionToolbar}>
-                    <span style={styles.toolbarLabel}>
-                      Select Knowledge Scope:
-                    </span>
-                    <div style={styles.scopeChipsRow}>
-                      <button
-                        style={
-                          selectedDocScope.length === 0
-                            ? styles.scopeChipActive
-                            : styles.scopeChipInactive
-                        }
-                        onClick={() => setSelectedDocScope([])}
-                      >
-                        🌍 All Ingested Documents
-                      </button>
-                      {docList
-                        .filter((d) => d.totalChunks > 0)
-                        .map((d) => {
-                          const isSelected = selectedDocScope.includes(
-                            d.documentId
-                          );
-                          return (
-                            <button
-                              key={d.documentId}
-                              style={
-                                isSelected
-                                  ? styles.scopeChipActive
-                                  : styles.scopeChipInactive
-                              }
-                              onClick={() => toggleScopeDoc(d.documentId)}
-                            >
-                              📄 {d.originalName}
-                            </button>
-                          );
-                        })}
-                    </div>
-                  </div>
-
-                  <div style={styles.chatLogContainer}>
-                    {ragChatLog.length === 0 ? (
-                      <div style={styles.emptyState}>
-                        <div style={styles.emptyStateIcon}>🧠</div>
-                        <h4 style={styles.emptyStateTitle}>
-                          Query your documents
-                        </h4>
-                        <p style={styles.emptyStateDesc}>
-                          Ask questions regarding the selected document scope or
-                          use the voice recording button below.
-                        </p>
-                      </div>
-                    ) : (
-                      ragChatLog.map((m) => (
-                        <div
-                          key={m.id}
-                          style={
-                            m.sender === 'User'
-                              ? styles.userBubble
-                              : styles.aiBubbleFull
-                          }
-                        >
-                          <span style={styles.bubbleSender}>
-                            {m.sender === 'User' ? 'You' : 'Document Assistant'}
-                          </span>
-                          <div style={styles.markdownContent}>
-                            <ReactMarkdown
-                              remarkPlugins={[remarkGfm, remarkMath]}
-                              rehypePlugins={[rehypeRaw, rehypeKatex]}
-                              components={{
-                                table: ({ children }) => (
-                                  <div
-                                    style={{
-                                      overflowX: 'auto',
-                                      margin: '8px 0',
-                                    }}
-                                  >
-                                    <table
-                                      style={{
-                                        width: '100%',
-                                        borderCollapse: 'collapse',
-                                        fontSize: '12px',
-                                      }}
-                                    >
-                                      {children}
-                                    </table>
-                                  </div>
-                                ),
-                                th: ({ children }) => (
-                                  <th
-                                    style={{
-                                      border:
-                                        '1px solid rgba(255, 255, 255, 0.15)',
-                                      padding: '5px 8px',
-                                      backgroundColor: '#0F172A',
-                                      textAlign: 'left',
-                                    }}
-                                  >
-                                    {children}
-                                  </th>
-                                ),
-                                td: ({ children }) => (
-                                  <td
-                                    style={{
-                                      border:
-                                        '1px solid rgba(255, 255, 255, 0.1)',
-                                      padding: '5px 8px',
-                                    }}
-                                  >
-                                    {children}
-                                  </td>
-                                ),
-                              }}
-                            >
-                              {m.text}
-                            </ReactMarkdown>
-                          </div>
-
-                          {m.sender === 'AI' && (
-                            <div style={styles.messageAudioBar}>
-                              <button
-                                onClick={() =>
-                                  toggleMessageAudio(m, setRagChatLog)
-                                }
-                                style={styles.audioBarPlayBtn}
-                                title={m.isPlaying ? 'Pause' : 'Play'}
-                              >
-                                {m.isPlaying ? (
-                                  <svg
-                                    viewBox="0 0 24 24"
-                                    width="11"
-                                    height="11"
-                                    fill="currentColor"
-                                  >
-                                    <rect
-                                      x="5"
-                                      y="4"
-                                      width="4"
-                                      height="16"
-                                      rx="1"
-                                    />
-                                    <rect
-                                      x="15"
-                                      y="4"
-                                      width="4"
-                                      height="16"
-                                      rx="1"
-                                    />
-                                  </svg>
-                                ) : (
-                                  <svg
-                                    viewBox="0 0 24 24"
-                                    width="11"
-                                    height="11"
-                                    fill="currentColor"
-                                  >
-                                    <polygon points="5,3 19,12 5,21" />
-                                  </svg>
-                                )}
-                              </button>
-                              <div
-                                style={styles.audioBarTrackWrapper}
-                                onClick={(e) =>
-                                  handleAudioProgressBarClick(
-                                    e,
-                                    m,
-                                    setRagChatLog
-                                  )
-                                }
-                              >
-                                <div
-                                  style={{
-                                    ...styles.audioBarFill,
-                                    width: `${m.progress || 0}%`,
-                                  }}
-                                />
-                              </div>
-                              <span style={styles.audioBarDuration}>
-                                {m.currentTimeFormatted || '0:00'} /{' '}
-                                {m.durationFormatted || '0:00'}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    )}
-                    {ragChatLoading && (
-                      <div style={styles.aiBubbleFull}>
-                        <span style={styles.bubbleSender}>
-                          Document Assistant
-                        </span>
-                        <div style={styles.typingIndicator}>
-                          <span>.</span>
-                          <span>.</span>
-                          <span>.</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={styles.ragInputBarContainer}>
-                    <input
-                      style={styles.input}
-                      value={ragChatInput}
-                      onChange={(e) => setRagChatInput(e.target.value)}
-                      placeholder={
-                        processingVoice
-                          ? 'Transcribing voice prompt...'
-                          : 'Ask anything about your document context...'
-                      }
-                      disabled={processingVoice}
-                      onKeyDown={(e) =>
-                        e.key === 'Enter' && sendRagChatMessage()
-                      }
-                    />
-
-                    {!isRecording ? (
-                      <button
-                        onClick={startRecording}
-                        disabled={processingVoice}
-                        style={styles.voiceIconButton}
-                        title="Record Voice Prompt"
-                      >
-                        🎙️
-                      </button>
-                    ) : (
-                      <button
-                        onClick={stopRecording}
-                        style={styles.voiceRecordingActiveBtn}
-                        title="Stop Recording"
-                      >
-                        ⏹️
-                      </button>
-                    )}
-
-                    <button
-                      onClick={sendRagChatMessage}
-                      disabled={ragChatLoading || !ragChatInput.trim()}
-                      style={
-                        ragChatLoading || !ragChatInput.trim()
-                          ? styles.disabledButton
-                          : styles.primaryButton
-                      }
-                    >
-                      Send →
-                    </button>
-                  </div>
-                  {isRecording && (
-                    <p style={styles.recordingIndicator}>
-                      🔴 Listening to microphone... Click stop when finished.
-                    </p>
-                  )}
-                  {processingVoice && (
-                    <p style={styles.processingIndicator}>
-                      ⏳ Transcribing voice audio into text bar...
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {activeNavPage === 4 && (
-                <div style={styles.pageSection}>
-                  <div style={styles.sectionHeadingRow}>
-                    <h2 style={styles.pageTitle}>Visual Document Inspector</h2>
-                    <p style={styles.pageDesc}>
-                      Examine original document layouts side-by-side with fully
-                      extracted continuous text and Markdown.
-                    </p>
-                  </div>
-
-                  <div style={styles.uploadCard}>
-                    <div style={{ marginTop: '8px', marginBottom: '12px' }}>
-                      <select
-                        value={selectedInspectorDocId}
-                        onChange={(e) => {
-                          const documentId = e.target.value;
-                          if (documentId) openComparisonWindow(documentId);
-                        }}
-                        style={{
-                          ...styles.input,
-                          width: '100%',
-                          maxWidth: '420px',
-                        }}
-                      >
-                        <option value="">
-                          -- Select an Ingested Document --
-                        </option>
-                        {ingestedDocs.map((doc) => (
-                          <option key={doc.documentId} value={doc.documentId}>
-                            {doc.originalName} ({doc.totalChunks} chunks)
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div
-                      style={{
-                        ...styles.emptyStateBox,
-                        height: '300px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <p style={styles.emptyFilesText}>
-                        {ingestedDocs.length === 0
-                          ? 'No ingested documents available. Upload and ingest vectors first.'
-                          : 'Select an ingested document to open the comparison in a new tab.'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+          {activeNavPage === 4 && (
+            <PageInspector
+              theme={theme}
+              ingestedDocs={ingestedDocs}
+              onOpen={openComparisonWindow}
+            />
           )}
         </main>
       </div>
-    </div>
+    </>
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  pageBackground: {
-    position: 'relative',
-    backgroundColor: '#0A1128',
-    minHeight: '100vh',
-    padding: '32px 20px',
-    fontFamily:
-      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    boxSizing: 'border-box',
-    color: '#F8FAFC',
-    overflowX: 'hidden',
-  },
-  canvasBackground: {
-    display: 'block',
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-    zIndex: 0,
-    pointerEvents: 'none',
-  },
-  container: {
-    position: 'relative',
-    zIndex: 1,
-    maxWidth: '1100px',
-    margin: '0 auto',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '24px',
-  },
-  topHeader: {
-    backgroundColor: '#1E293B',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
-    borderRadius: '20px',
-    padding: '18px 28px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)',
-  },
-  brandHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '14px',
-  },
-  brandLogo: {
-    width: '40px',
-    height: '40px',
-    borderRadius: '12px',
-    background: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '20px',
-    boxShadow: '0 4px 12px rgba(99, 102, 241, 0.4)',
-  },
-  brandLogoLarge: {
-    width: '52px',
-    height: '52px',
-    borderRadius: '16px',
-    background: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '24px',
-    margin: '0 auto 16px auto',
-    boxShadow: '0 6px 16px rgba(99, 102, 241, 0.4)',
-  },
-  title: {
-    color: '#F8FAFC',
-    fontSize: '17px',
-    fontWeight: '700',
-    margin: '0',
-    letterSpacing: '-0.3px',
-  },
-  subtitle: {
-    color: '#94A3B8',
-    fontSize: '11px',
-    margin: '2px 0 0 0',
-    fontWeight: '500',
-  },
-  navBar: {
-    display: 'flex',
-    gap: '6px',
-    backgroundColor: '#0F172A',
-    padding: '5px',
-    borderRadius: '14px',
-    border: '1px solid rgba(255, 255, 255, 0.06)',
-  },
-  activeNavBtn: {
-    background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
-    color: '#FFFFFF',
-    border: 'none',
-    padding: '8px 16px',
-    borderRadius: '10px',
-    fontWeight: '600',
-    fontSize: '12px',
-    cursor: 'pointer',
-    boxShadow: '0 4px 12px rgba(99, 102, 241, 0.35)',
-    transition: 'all 0.2s ease',
-  },
-  inactiveNavBtn: {
-    backgroundColor: 'transparent',
-    color: '#94A3B8',
-    border: 'none',
-    padding: '8px 16px',
-    borderRadius: '10px',
-    fontWeight: '500',
-    fontSize: '12px',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-  },
-  signOutBtn: {
-    backgroundColor: 'transparent',
-    color: '#94A3B8',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    padding: '8px 16px',
-    borderRadius: '10px',
-    fontSize: '12px',
-    fontWeight: '500',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-  },
-  mainContentArea: {
-    backgroundColor: '#1E293B',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
-    borderRadius: '20px',
-    padding: '32px',
-    boxShadow: '0 15px 35px -10px rgba(0, 0, 0, 0.4)',
-    minHeight: '600px',
-  },
-  pageSection: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '22px',
-  },
-  sectionHeadingRow: {
-    marginBottom: '2px',
-  },
-  pageTitle: {
-    fontSize: '19px',
-    fontWeight: '700',
-    color: '#F8FAFC',
-    margin: '0 0 4px 0',
-    letterSpacing: '-0.2px',
-  },
-  pageDesc: {
-    fontSize: '13px',
-    color: '#94A3B8',
-    margin: 0,
-  },
-  uploadCard: {
-    backgroundColor: '#0F172A',
-    border: '1px solid rgba(255, 255, 255, 0.06)',
-    borderRadius: '16px',
-    padding: '20px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '14px',
-  },
-  cardSectionTitle: {
-    fontSize: '11px',
-    fontWeight: '700',
-    color: '#818CF8',
-    margin: 0,
-    textTransform: 'uppercase',
-    letterSpacing: '0.8px',
-  },
-  uploadRow: {
-    display: 'flex',
-    gap: '12px',
-    alignItems: 'center',
-  },
-  fileDropZone: {
-    flex: 1,
-    border: '1px dashed rgba(99, 102, 241, 0.3)',
-    borderRadius: '12px',
-    padding: '14px 18px',
-    textAlign: 'center',
-    cursor: 'pointer',
-    backgroundColor: '#1E293B',
-    transition: 'all 0.2s',
-  },
-  fileDropText: {
-    fontSize: '13px',
-    color: '#CBD5E1',
-    wordBreak: 'break-all',
-  },
-  documentsContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-  },
-  emptyStateBox: {
-    backgroundColor: '#0F172A',
-    border: '1px solid rgba(255, 255, 255, 0.06)',
-    borderRadius: '16px',
-    padding: '40px',
-    textAlign: 'center',
-  },
-  emptyFilesText: {
-    fontSize: '13px',
-    color: '#64748B',
-    margin: 0,
-  },
-  docListStack: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-  },
-  docItemCard: {
-    backgroundColor: '#0F172A',
-    border: '1px solid rgba(255, 255, 255, 0.06)',
-    borderRadius: '16px',
-    padding: '18px 22px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '14px',
-  },
-  docMainInfoRow: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: '16px',
-  },
-  docMetaCol: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '6px',
-    flex: 1,
-  },
-  docNameText: {
-    fontSize: '14px',
-    fontWeight: '600',
-    color: '#F8FAFC',
-  },
-  badgeRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-  },
-  statusBadgeChunked: {
-    backgroundColor: 'rgba(52, 211, 153, 0.1)',
-    color: '#34D399',
-    border: '1px solid rgba(52, 211, 153, 0.2)',
-    padding: '2px 8px',
-    borderRadius: '6px',
-    fontSize: '11px',
-    fontWeight: '600',
-  },
-  statusBadgeStaged: {
-    backgroundColor: 'rgba(251, 191, 36, 0.1)',
-    color: '#FBBF24',
-    border: '1px solid rgba(251, 191, 36, 0.2)',
-    padding: '2px 8px',
-    borderRadius: '6px',
-    fontSize: '11px',
-    fontWeight: '600',
-  },
-  metaSubText: {
-    fontSize: '11px',
-    color: '#64748B',
-  },
-  docActionRow: {
-    display: 'flex',
-    gap: '8px',
-    alignItems: 'center',
-  },
-  chunkPreviewBox: {
-    backgroundColor: '#1E293B',
-    border: '1px solid rgba(255, 255, 255, 0.06)',
-    borderRadius: '12px',
-    padding: '16px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-  },
-  mongoServerHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '11px',
-    fontWeight: '700',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-    paddingBottom: '8px',
-  },
-  chunksGrid: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-    maxHeight: '240px',
-    overflowY: 'auto',
-  },
-  chunkCard: {
-    backgroundColor: '#0F172A',
-    border: '1px solid rgba(255, 255, 255, 0.06)',
-    borderRadius: '10px',
-    padding: '12px 14px',
-  },
-  chunkCardHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '11px',
-    color: '#818CF8',
-    fontWeight: '600',
-    marginBottom: '4px',
-  },
-  chunkTextSnippet: {
-    fontSize: '12px',
-    color: '#94A3B8',
-    margin: 0,
-    lineHeight: '1.4',
-  },
-  chatLogContainer: {
-    height: '460px',
-    overflowY: 'auto',
-    overflowX: 'hidden',
-    border: '1px solid rgba(255, 255, 255, 0.06)',
-    borderRadius: '16px',
-    padding: '16px 20px',
-    backgroundColor: '#0F172A',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '14px',
-    marginBottom: '14px',
-  },
-  emptyState: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-    color: '#64748B',
-    textAlign: 'center',
-  },
-  emptyStateIcon: {
-    fontSize: '32px',
-    marginBottom: '10px',
-  },
-  emptyStateTitle: {
-    color: '#E2E8F0',
-    fontSize: '15px',
-    fontWeight: '600',
-    margin: '0 0 4px 0',
-  },
-  emptyStateDesc: {
-    fontSize: '12px',
-    margin: 0,
-    color: '#64748B',
-  },
-  userBubble: {
-    alignSelf: 'flex-end',
-    background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
-    color: '#FFFFFF',
-    padding: '10px 14px',
-    borderRadius: '12px 12px 2px 12px',
-    maxWidth: '75%',
-    boxShadow: '0 2px 8px rgba(99, 102, 241, 0.25)',
-    fontSize: '13px',
-  },
-  aiBubbleFull: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#151C2C',
-    border: '1px solid rgba(255, 255, 255, 0.05)',
-    color: '#E2E8F0',
-    padding: '12px 14px',
-    borderRadius: '12px 12px 12px 2px',
-    maxWidth: '78%',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '6px',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-  },
-  messageAudioBar: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    backgroundColor: '#0F172A',
-    border: '1px solid rgba(255, 255, 255, 0.05)',
-    borderRadius: '6px',
-    padding: '4px 10px',
-    marginTop: '6px',
-  },
-  audioBarPlayBtn: {
-    background: '#6366F1',
-    color: '#FFFFFF',
-    border: 'none',
-    width: '22px',
-    height: '22px',
-    borderRadius: '50%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
-    flexShrink: 0,
-  },
-  audioBarTrackWrapper: {
-    flex: 1,
-    height: '4px',
-    backgroundColor: '#1E293B',
-    borderRadius: '2px',
-    position: 'relative',
-    overflow: 'hidden',
-    cursor: 'pointer',
-  },
-  audioBarFill: {
-    height: '100%',
-    backgroundColor: '#6366F1',
-    borderRadius: '2px',
-    transition: 'width 0.2s linear',
-  },
-  audioBarDuration: {
-    fontSize: '10px',
-    color: '#94A3B8',
-    fontVariantNumeric: 'tabular-nums',
-    flexShrink: '0',
-  },
-  bubbleSender: {
-    fontSize: '10px',
-    fontWeight: '700',
-    display: 'block',
-    marginBottom: '1px',
-    color: '#818CF8',
-    textTransform: 'uppercase',
-    letterSpacing: '0.6px',
-  },
-  markdownContent: {
-    fontSize: '13px',
-    lineHeight: '1.45',
-    margin: 0,
-  },
-  ragInputBarContainer: {
-    display: 'flex',
-    gap: '10px',
-    alignItems: 'center',
-  },
-  input: {
-    flex: 1,
-    padding: '12px 18px',
-    borderRadius: '12px',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
-    backgroundColor: '#0F172A',
-    fontSize: '13px',
-    color: '#F8FAFC',
-    outline: 'none',
-    transition: 'border-color 0.2s',
-  },
-  primaryButton: {
-    background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
-    color: '#FFFFFF',
-    border: 'none',
-    padding: '11px 18px',
-    borderRadius: '10px',
-    fontWeight: '600',
-    fontSize: '12px',
-    cursor: 'pointer',
-    boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
-    transition: 'all 0.2s ease',
-  },
-  secondaryButtonSmall: {
-    backgroundColor: '#334155',
-    color: '#E2E8F0',
-    border: '1px solid rgba(255, 255, 255, 0.06)',
-    padding: '8px 14px',
-    borderRadius: '8px',
-    fontWeight: '600',
-    fontSize: '11px',
-    cursor: 'pointer',
-  },
-  warningButtonSmall: {
-    backgroundColor: 'rgba(251, 191, 36, 0.1)',
-    color: '#FBBF24',
-    border: '1px solid rgba(251, 191, 36, 0.2)',
-    padding: '8px 14px',
-    borderRadius: '8px',
-    fontWeight: '600',
-    fontSize: '11px',
-    cursor: 'pointer',
-  },
-  dangerButtonSmall: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    color: '#F87171',
-    border: '1px solid rgba(239, 68, 68, 0.2)',
-    padding: '8px 14px',
-    borderRadius: '8px',
-    fontWeight: '600',
-    fontSize: '11px',
-    cursor: 'pointer',
-  },
-  primaryButtonLarge: {
-    background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
-    color: '#FFFFFF',
-    border: 'none',
-    padding: '13px',
-    borderRadius: '12px',
-    fontWeight: '600',
-    fontSize: '13px',
-    cursor: 'pointer',
-    width: '100%',
-    marginTop: '6px',
-    boxShadow: '0 4px 15px rgba(99, 102, 241, 0.35)',
-  },
-  voiceIconButton: {
-    backgroundColor: '#0F172A',
-    color: '#F43F5E',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
-    borderRadius: '12px',
-    width: '44px',
-    height: '44px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '16px',
-    cursor: 'pointer',
-  },
-  voiceRecordingActiveBtn: {
-    backgroundColor: '#F43F5E',
-    color: '#FFFFFF',
-    border: 'none',
-    borderRadius: '12px',
-    width: '44px',
-    height: '44px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '16px',
-    cursor: 'pointer',
-    boxShadow: '0 0 15px rgba(244, 63, 94, 0.5)',
-  },
-  disabledButton: {
-    backgroundColor: '#334155',
-    color: '#64748B',
-    border: 'none',
-    padding: '11px 18px',
-    borderRadius: '10px',
-    fontWeight: '600',
-    fontSize: '12px',
-    cursor: 'not-allowed',
-  },
-  successText: {
-    color: '#34D399',
-    fontSize: '12px',
-    margin: '4px 0 0 0',
-    fontWeight: '500',
-  },
-  recordingIndicator: {
-    color: '#F43F5E',
-    fontSize: '12px',
-    marginTop: '6px',
-    fontWeight: '600',
-  },
-  processingIndicator: {
-    color: '#818CF8',
-    fontSize: '12px',
-    marginTop: '6px',
-    fontWeight: '600',
-  },
-  docSelectionToolbar: {
-    backgroundColor: '#0F172A',
-    border: '1px solid rgba(255, 255, 255, 0.06)',
-    borderRadius: '16px',
-    padding: '16px 20px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-  },
-  toolbarLabel: {
-    fontSize: '11.5px',
-    fontWeight: '700',
-    color: '#818CF8',
-    textTransform: 'uppercase',
-    letterSpacing: '0.6px',
-  },
-  scopeChipsRow: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '8px',
-  },
-  scopeChipActive: {
-    background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
-    color: '#FFFFFF',
-    border: '1px solid transparent',
-    padding: '7px 14px',
-    borderRadius: '10px',
-    fontSize: '12px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)',
-  },
-  scopeChipInactive: {
-    backgroundColor: '#1E293B',
-    color: '#94A3B8',
-    border: '1px solid rgba(255, 255, 255, 0.06)',
-    padding: '7px 14px',
-    borderRadius: '10px',
-    fontSize: '12px',
-    fontWeight: '500',
-    cursor: 'pointer',
-  },
-  authWrapper: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: '460px',
-  },
-  authCard: {
-    width: '100%',
-    maxWidth: '380px',
-    padding: '10px',
-  },
-  authHeader: {
-    textAlign: 'center',
-    marginBottom: '24px',
-  },
-  authTitle: {
-    fontSize: '20px',
-    fontWeight: '700',
-    color: '#F8FAFC',
-    margin: '0 0 4px 0',
-  },
-  authSubtitle: {
-    fontSize: '12px',
-    color: '#94A3B8',
-    margin: 0,
-  },
-  inputFieldWrapper: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '6px',
-    marginBottom: '16px',
-  },
-  inputLabel: {
-    fontSize: '11px',
-    fontWeight: '700',
-    color: '#818CF8',
-    textTransform: 'uppercase',
-    letterSpacing: '0.6px',
-  },
-  typingIndicator: {
-    display: 'flex',
-    gap: '4px',
-    fontSize: '16px',
-    letterSpacing: '2px',
-    color: '#94A3B8',
-  },
-  formStack: {
-    display: 'flex',
-    flexDirection: 'column',
-  },
+// ─── Style helpers ────────────────────────────────────────────────────────────
+const backgroundCanvasStyle: React.CSSProperties = {
+  display: 'block',
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  width: '100%',
+  height: '100%',
+  zIndex: 0,
+  pointerEvents: 'none',
 };
+
+const inputStyle = (theme: Theme): React.CSSProperties => ({
+  width: '100%',
+  padding: '12px 14px',
+  borderRadius: theme.radiusSm,
+  border: `1px solid ${theme.separatorStrong}`,
+  background:
+    theme.name === 'liquid-glass' ? 'rgba(255,255,255,0.6)' : theme.surfaceAlt,
+  fontSize: 14,
+  color: theme.textPrimary,
+  outline: 'none',
+  boxSizing: 'border-box',
+  fontFamily: theme.fontSans,
+  transition: `border-color 160ms ${theme.ease}`,
+});
+
+const primaryButtonStyle = (theme: Theme): React.CSSProperties => ({
+  background: theme.accentGradient,
+  color: '#FFFFFF',
+  border: 'none',
+  padding: '12px 18px',
+  borderRadius: theme.radiusSm,
+  fontWeight: 600,
+  fontSize: 14,
+  cursor: 'pointer',
+  boxShadow: `0 6px 18px ${theme.accentSoft}`,
+  fontFamily: theme.fontSans,
+  transition: `transform 160ms ${theme.spring}, box-shadow 160ms ${theme.ease}`,
+});
+
+const cardStyle = (theme: Theme): React.CSSProperties => ({
+  background: theme.surface,
+  border: `1px solid ${theme.separator}`,
+  borderRadius: theme.radiusLg,
+  padding: 20,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 14,
+  backdropFilter: theme.name === 'liquid-glass' ? 'blur(20px)' : 'none',
+  WebkitBackdropFilter: theme.name === 'liquid-glass' ? 'blur(20px)' : 'none',
+});
+
+const cardLabelStyle = (theme: Theme): React.CSSProperties => ({
+  fontSize: 11,
+  fontWeight: 700,
+  color: theme.textSecondary,
+  margin: 0,
+  textTransform: 'uppercase',
+  letterSpacing: '0.7px',
+});
+
+const chipStyle = (theme: Theme, active: boolean): React.CSSProperties => ({
+  background: active ? theme.accent : theme.surface,
+  color: active ? '#FFFFFF' : theme.textPrimary,
+  border: active ? 'none' : `1px solid ${theme.separatorStrong}`,
+  padding: '7px 14px',
+  borderRadius: theme.radiusPill,
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: 'pointer',
+  fontFamily: theme.fontSans,
+  transition: `all 160ms ${theme.ease}`,
+  boxShadow: active ? `0 4px 12px ${theme.accentSoft}` : 'none',
+  whiteSpace: 'nowrap',
+  maxWidth: 220,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+});
+
+const ghostButtonStyle = (
+  theme: Theme,
+  color?: string
+): React.CSSProperties => ({
+  background: 'transparent',
+  color: color || theme.textSecondary,
+  border: `1px solid ${theme.separatorStrong}`,
+  padding: '8px 12px',
+  borderRadius: theme.radiusSm,
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: 'pointer',
+  fontFamily: theme.fontSans,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  transition: `all 160ms ${theme.ease}`,
+});
+
+const disabledButtonStyle = (theme: Theme): React.CSSProperties => ({
+  background: theme.separatorStrong,
+  color: theme.textTertiary,
+  border: 'none',
+  padding: '12px 18px',
+  borderRadius: theme.radiusSm,
+  fontWeight: 600,
+  fontSize: 14,
+  cursor: 'not-allowed',
+  fontFamily: theme.fontSans,
+});
+
+// ─── Page: Documents ──────────────────────────────────────────────────────────
+interface PageDocsProps {
+  theme: Theme;
+  docList: UploadedDoc[];
+  selectedFile: File | null;
+  setSelectedFile: (f: File | null) => void;
+  uploadingDoc: boolean;
+  handleDocUpload: () => void;
+  docSuccessMsg: string;
+  expandedDocId: string | null;
+  setExpandedDocId: (id: string | null) => void;
+  chunkingDocId: string | null;
+  unchunkingDocId: string | null;
+  deletingDocId: string | null;
+  handleChunkDoc: (id: string) => void;
+  handleUnchunkDoc: (id: string) => void;
+  handleDeleteDoc: (id: string, name: string) => void;
+}
+
+const PageDocuments: React.FC<PageDocsProps> = ({
+  theme,
+  docList,
+  selectedFile,
+  setSelectedFile,
+  uploadingDoc,
+  handleDocUpload,
+  docSuccessMsg,
+  expandedDocId,
+  setExpandedDocId,
+  chunkingDocId,
+  unchunkingDocId,
+  deletingDocId,
+  handleChunkDoc,
+  handleUnchunkDoc,
+  handleDeleteDoc,
+}) => {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div>
+        <h1
+          style={{
+            fontSize: 26,
+            fontWeight: 700,
+            color: theme.textPrimary,
+            margin: '0 0 4px 0',
+            letterSpacing: '-0.5px',
+          }}
+        >
+          Documents
+        </h1>
+        <p style={{ fontSize: 14, color: theme.textSecondary, margin: 0 }}>
+          Upload PDFs and prepare them for AI queries.
+        </p>
+      </div>
+
+      <div style={cardStyle(theme)}>
+        <h3 style={cardLabelStyle(theme)}>Upload new document</h3>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <label
+            style={{
+              flex: 1,
+              border: `1px dashed ${theme.separatorStrong}`,
+              borderRadius: theme.radiusMd,
+              padding: '16px 20px',
+              textAlign: 'center',
+              cursor: 'pointer',
+              background: theme.surfaceAlt,
+              transition: `border-color 160ms ${theme.ease}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+            }}
+          >
+            <IconUpload size={18} color={theme.textSecondary} />
+            <span
+              style={{
+                fontSize: 14,
+                color: theme.textPrimary,
+                fontWeight: 500,
+                wordBreak: 'break-all',
+              }}
+            >
+              {selectedFile ? selectedFile.name : 'Choose a PDF file'}
+            </span>
+            <input
+              type="file"
+              accept=".pdf"
+              onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+              disabled={uploadingDoc}
+              style={{ display: 'none' }}
+            />
+          </label>
+          <button
+            onClick={handleDocUpload}
+            disabled={!selectedFile || uploadingDoc}
+            style={{
+              ...(!selectedFile || uploadingDoc
+                ? disabledButtonStyle(theme)
+                : primaryButtonStyle(theme)),
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              minWidth: 110,
+            }}
+          >
+            {uploadingDoc && (
+              <Spinner size={14} color={theme.textTertiary} strokeWidth={2.2} />
+            )}
+            <span>{uploadingDoc ? 'Uploading' : 'Upload'}</span>
+          </button>
+        </div>
+        {docSuccessMsg && (
+          <p
+            style={{
+              color: theme.success,
+              fontSize: 13,
+              margin: '4px 0 0 0',
+              fontWeight: 500,
+            }}
+          >
+            {docSuccessMsg}
+          </p>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <h3 style={cardLabelStyle(theme)}>Indexed documents</h3>
+        {docList.length === 0 ? (
+          <div
+            style={{
+              ...cardStyle(theme),
+              padding: 48,
+              textAlign: 'center',
+            }}
+          >
+            <p style={{ fontSize: 14, color: theme.textSecondary, margin: 0 }}>
+              No documents uploaded yet.
+            </p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {docList.map((doc) => {
+              const isChunked = doc.totalChunks > 0;
+              const isExpanded = expandedDocId === doc.documentId;
+              return (
+                <div key={doc.documentId} style={cardStyle(theme)}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 16,
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: theme.textPrimary,
+                          marginBottom: 6,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {doc.originalName}
+                      </div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <span
+                          style={{
+                            background: isChunked
+                              ? theme.successSoft
+                              : theme.warningSoft,
+                            color: isChunked ? theme.success : theme.warning,
+                            padding: '3px 10px',
+                            borderRadius: 8,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            letterSpacing: '0.2px',
+                          }}
+                        >
+                          {isChunked
+                            ? `Ingested · ${doc.totalChunks} chunks`
+                            : 'Staged · Unchunked'}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: theme.textTertiary,
+                          }}
+                        >
+                          {(doc.fileSize / 1024).toFixed(1)} KB ·{' '}
+                          {doc.characterCount} chars
+                        </span>
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: 8,
+                        alignItems: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {!isChunked ? (
+                        <button
+                          onClick={() => handleChunkDoc(doc.documentId)}
+                          disabled={chunkingDocId === doc.documentId}
+                          style={{
+                            ...primaryButtonStyle(theme),
+                            padding: '8px 14px',
+                            fontSize: 12,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 8,
+                            minWidth: 150,
+                          }}
+                        >
+                          {chunkingDocId === doc.documentId ? (
+                            <Spinner
+                              size={14}
+                              color="#FFFFFF"
+                              strokeWidth={2.2}
+                            />
+                          ) : (
+                            <IconZap size={14} color="#FFFFFF" />
+                          )}
+                          <span>
+                            {chunkingDocId === doc.documentId
+                              ? 'Processing'
+                              : 'Ingest Vectors'}
+                          </span>
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() =>
+                              setExpandedDocId(
+                                isExpanded ? null : doc.documentId
+                              )
+                            }
+                            style={ghostButtonStyle(theme)}
+                          >
+                            {isExpanded ? (
+                              <IconChevronUp
+                                size={14}
+                                color={theme.textSecondary}
+                              />
+                            ) : (
+                              <IconChevronDown
+                                size={14}
+                                color={theme.textSecondary}
+                              />
+                            )}
+                            {isExpanded ? 'Hide' : 'Chunks'}
+                          </button>
+                          <button
+                            onClick={() => handleUnchunkDoc(doc.documentId)}
+                            disabled={unchunkingDocId === doc.documentId}
+                            style={ghostButtonStyle(theme, theme.warning)}
+                          >
+                            {unchunkingDocId === doc.documentId ? (
+                              <Spinner
+                                size={14}
+                                color={theme.warning}
+                                strokeWidth={2.2}
+                              />
+                            ) : (
+                              <IconRefresh size={14} color={theme.warning} />
+                            )}
+                            <span>
+                              {unchunkingDocId === doc.documentId
+                                ? 'Processing'
+                                : 'Purge'}
+                            </span>
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() =>
+                          handleDeleteDoc(doc.documentId, doc.originalName)
+                        }
+                        disabled={deletingDocId === doc.documentId}
+                        style={ghostButtonStyle(theme, theme.danger)}
+                        title="Delete permanently"
+                      >
+                        <IconTrash
+                          size={14}
+                          color={
+                            deletingDocId === doc.documentId
+                              ? theme.textTertiary
+                              : theme.danger
+                          }
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  {isExpanded && isChunked && (
+                    <div
+                      style={{
+                        marginTop: 16,
+                        padding: 16,
+                        background: theme.surfaceAlt,
+                        borderRadius: theme.radiusMd,
+                        border: `1px solid ${theme.separator}`,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        minHeight: 0,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: theme.textSecondary,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.6px',
+                          paddingBottom: 10,
+                          borderBottom: `1px solid ${theme.separator}`,
+                          marginBottom: 12,
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          gap: 12,
+                        }}
+                      >
+                        <span>Chunks</span>
+                        <span style={{ color: theme.accent }}>
+                          {doc.filename}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          maxHeight: 280,
+                          overflowY: 'auto',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                        }}
+                      >
+                        {doc.chunks.map((chunk) => (
+                          <div
+                            key={chunk.chunkIndex}
+                            style={{
+                              background:
+                                theme.name === 'liquid-glass'
+                                  ? 'rgba(255,255,255,0.6)'
+                                  : theme.surface,
+                              border: `1px solid ${theme.separator}`,
+                              borderRadius: theme.radiusSm,
+                              padding: '10px 14px',
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                fontSize: 11,
+                                color: theme.accent,
+                                fontWeight: 600,
+                                marginBottom: 6,
+                              }}
+                            >
+                              <span>Chunk #{chunk.chunkIndex}</span>
+                              <span style={{ color: theme.textTertiary }}>
+                                {chunk.characterCount} chars ·{' '}
+                                {chunk.vectorDimensions}-dim
+                              </span>
+                            </div>
+                            <p
+                              style={{
+                                fontSize: 12,
+                                color: theme.textSecondary,
+                                margin: 0,
+                                lineHeight: 1.5,
+                              }}
+                            >
+                              {chunk.text}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── Page: General Chat ───────────────────────────────────────────────────────
+interface PageGeneralChatProps {
+  theme: Theme;
+  log: ChatMessage[];
+  loading: boolean;
+  input: string;
+  setInput: (v: string) => void;
+  onSend: () => void;
+  isRecording: boolean;
+  onStartRecording: () => void;
+  onStopRecording: () => void;
+  processingVoice: boolean;
+  onToggleAudio: (m: ChatMessage) => void;
+  onSeek: (e: React.MouseEvent<HTMLDivElement>, m: ChatMessage) => void;
+}
+
+const PageGeneralChat: React.FC<PageGeneralChatProps> = ({
+  theme,
+  log,
+  loading,
+  input,
+  setInput,
+  onSend,
+  isRecording,
+  onStartRecording,
+  onStopRecording,
+  processingVoice,
+  onToggleAudio,
+  onSeek,
+}) => (
+  <div
+    style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 20,
+      height: '100%',
+      minHeight: 0,
+    }}
+  >
+    <div>
+      <h1
+        style={{
+          fontSize: 26,
+          fontWeight: 700,
+          color: theme.textPrimary,
+          margin: '0 0 4px 0',
+          letterSpacing: '-0.5px',
+        }}
+      >
+        General Chat
+      </h1>
+      <p style={{ fontSize: 14, color: theme.textSecondary, margin: 0 }}>
+        Conversational assistant for anything — coursework, coding,
+        explanations.
+      </p>
+    </div>
+
+    <ChatLog
+      theme={theme}
+      log={log}
+      loading={loading}
+      emptyTitle="Start a conversation"
+      emptyDesc="Ask about programming, algorithms, math, or notes."
+      onToggleAudio={onToggleAudio}
+      onSeek={onSeek}
+      senderAI="Campus AI"
+    />
+
+    <ChatInput
+      theme={theme}
+      input={input}
+      setInput={setInput}
+      onSend={onSend}
+      loading={loading}
+      isRecording={isRecording}
+      onStartRecording={onStartRecording}
+      onStopRecording={onStopRecording}
+      processingVoice={processingVoice}
+      placeholder="Type a message or record voice…"
+    />
+  </div>
+);
+
+// ─── Page: RAG Chat ───────────────────────────────────────────────────────────
+interface PageRagChatProps extends PageGeneralChatProps {
+  docList: UploadedDoc[];
+  selectedScope: string[];
+  onToggleScope: (id: string) => void;
+  onClearScope: () => void;
+  scopeExpanded: boolean;
+  onToggleScopeExpanded: () => void;
+}
+
+const PageRagChat: React.FC<PageRagChatProps> = ({
+  theme,
+  log,
+  loading,
+  input,
+  setInput,
+  onSend,
+  isRecording,
+  onStartRecording,
+  onStopRecording,
+  processingVoice,
+  onToggleAudio,
+  onSeek,
+  docList,
+  selectedScope,
+  onToggleScope,
+  onClearScope,
+  scopeExpanded,
+  onToggleScopeExpanded,
+}) => {
+  const ingested = docList.filter((d) => d.totalChunks > 0);
+  const [allowScroll, setAllowScroll] = useState(false);
+
+  useEffect(() => {
+    if (scopeExpanded) {
+      const t = window.setTimeout(() => setAllowScroll(true), 240);
+      return () => window.clearTimeout(t);
+    }
+    const t = window.setTimeout(() => setAllowScroll(false), 0);
+    return () => window.clearTimeout(t);
+  }, [scopeExpanded]);
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 20,
+        height: '100%',
+        minHeight: 0,
+      }}
+    >
+      <div>
+        <h1
+          style={{
+            fontSize: 26,
+            fontWeight: 700,
+            color: theme.textPrimary,
+            margin: '0 0 4px 0',
+            letterSpacing: '-0.5px',
+          }}
+        >
+          RAG & Voice
+        </h1>
+        <p style={{ fontSize: 14, color: theme.textSecondary, margin: 0 }}>
+          Ask questions grounded in your uploaded documents.
+        </p>
+      </div>
+
+      <div style={cardStyle(theme)}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <h3 style={cardLabelStyle(theme)}>
+            Knowledge scope
+            {ingested.length > 0 && (
+              <span
+                style={{
+                  marginLeft: 8,
+                  fontSize: 11,
+                  color: theme.textTertiary,
+                  fontWeight: 600,
+                  letterSpacing: '0.2px',
+                  textTransform: 'none',
+                }}
+              >
+                {selectedScope.length === 0
+                  ? `All ${ingested.length}`
+                  : `${selectedScope.length} of ${ingested.length} selected`}
+              </span>
+            )}
+          </h3>
+          {ingested.length > 5 && (
+            <button
+              onClick={onToggleScopeExpanded}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                color: theme.accent,
+                fontSize: 11,
+                fontWeight: 600,
+                fontFamily: theme.fontSans,
+                padding: 4,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              {scopeExpanded ? 'Collapse' : 'Expand'}
+              {scopeExpanded ? (
+                <IconChevronUp size={12} color={theme.accent} />
+              ) : (
+                <IconChevronDown size={12} color={theme.accent} />
+              )}
+            </button>
+          )}
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 8,
+            maxHeight: scopeExpanded ? 240 : 36,
+            overflowY: allowScroll ? 'auto' : 'hidden',
+            transition: 'max-height 220ms cubic-bezier(0.4, 0, 0.2, 1)',
+            paddingRight: allowScroll ? 4 : 0,
+          }}
+        >
+          <button
+            onClick={onClearScope}
+            style={chipStyle(theme, selectedScope.length === 0)}
+          >
+            All documents
+          </button>
+          {ingested.map((d) => (
+            <button
+              key={d.documentId}
+              onClick={() => onToggleScope(d.documentId)}
+              style={chipStyle(theme, selectedScope.includes(d.documentId))}
+            >
+              {d.originalName}
+            </button>
+          ))}
+          {ingested.length === 0 && (
+            <span
+              style={{
+                fontSize: 12,
+                color: theme.textTertiary,
+                alignSelf: 'center',
+              }}
+            >
+              No ingested documents yet.
+            </span>
+          )}
+        </div>
+      </div>
+
+      <ChatLog
+        theme={theme}
+        log={log}
+        loading={loading}
+        emptyTitle="Query your documents"
+        emptyDesc="Ask anything or use the mic to speak."
+        onToggleAudio={onToggleAudio}
+        onSeek={onSeek}
+        senderAI="Document Assistant"
+      />
+
+      <ChatInput
+        theme={theme}
+        input={input}
+        setInput={setInput}
+        onSend={onSend}
+        loading={loading}
+        isRecording={isRecording}
+        onStartRecording={onStartRecording}
+        onStopRecording={onStopRecording}
+        processingVoice={processingVoice}
+        placeholder="Ask anything about your documents…"
+      />
+    </div>
+  );
+};
+
+// ─── Page: Inspector ──────────────────────────────────────────────────────────
+interface PageInspectorProps {
+  theme: Theme;
+  ingestedDocs: UploadedDoc[];
+  onOpen: (id: string) => void;
+}
+
+const PageInspector: React.FC<PageInspectorProps> = ({
+  theme,
+  ingestedDocs,
+  onOpen,
+}) => {
+  const [selected, setSelected] = useState('');
+  const currentDoc = ingestedDocs.find((d) => d.documentId === selected);
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 20,
+        height: '100%',
+        minHeight: 0,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 24,
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+          <h1
+            style={{
+              fontSize: 26,
+              fontWeight: 700,
+              color: theme.textPrimary,
+              margin: '0 0 4px 0',
+              letterSpacing: '-0.5px',
+            }}
+          >
+            Visual Inspector
+          </h1>
+          <p style={{ fontSize: 14, color: theme.textSecondary, margin: 0 }}>
+            Compare a PDF against its extracted structure side-by-side.
+          </p>
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+            flex: '0 1 420px',
+            minWidth: 0,
+          }}
+        >
+          <span style={cardLabelStyle(theme)}>Select document</span>
+          <select
+            value={selected}
+            onChange={(e) => setSelected(e.target.value)}
+            style={{
+              ...inputStyle(theme),
+              cursor: 'pointer',
+            }}
+          >
+            <option value="">— Choose an ingested document —</option>
+            {ingestedDocs.map((d) => (
+              <option key={d.documentId} value={d.documentId}>
+                {d.originalName} · {d.totalChunks} chunks
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {currentDoc ? (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)',
+            gap: 16,
+            flex: 1,
+            minHeight: 0,
+          }}
+        >
+          <div
+            style={{
+              ...cardStyle(theme),
+              padding: 0,
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 0,
+              height: '100%',
+            }}
+          >
+            <div
+              style={{
+                padding: '10px 16px',
+                borderBottom: `1px solid ${theme.separator}`,
+                fontSize: 11,
+                fontWeight: 700,
+                color: theme.textSecondary,
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+            >
+              Preview · {currentDoc.originalName}
+            </div>
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                background: '#E8ECF2',
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'center',
+                overflowY: 'auto',
+                padding: 16,
+              }}
+            >
+              <PdfPreviewer
+                url={`http://localhost:3001/uploads/${currentDoc.filename}`}
+              />
+            </div>
+            <div
+              style={{
+                padding: '12px 16px',
+                borderTop: `1px solid ${theme.separator}`,
+                display: 'flex',
+                justifyContent: 'flex-end',
+                alignItems: 'center',
+                gap: 12,
+                background: theme.surface,
+                flexShrink: 0,
+              }}
+            >
+              <button
+                onClick={() => onOpen(currentDoc.documentId)}
+                style={{
+                  ...primaryButtonStyle(theme),
+                  padding: '10px 20px',
+                  fontSize: 13,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  flexShrink: 0,
+                  minHeight: 40,
+                }}
+              >
+                <IconScan size={16} color="#FFFFFF" />
+                Open Comparison
+              </button>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              overflowY: 'auto',
+              minHeight: 0,
+              paddingRight: 4,
+            }}
+          >
+            <div style={cardStyle(theme)}>
+              <h3 style={cardLabelStyle(theme)}>Document stats</h3>
+              <StatRow
+                theme={theme}
+                label="Original name"
+                value={currentDoc.originalName}
+              />
+              <StatRow
+                theme={theme}
+                label="File size"
+                value={`${(currentDoc.fileSize / 1024).toFixed(1)} KB`}
+              />
+              <StatRow
+                theme={theme}
+                label="Characters"
+                value={currentDoc.characterCount.toLocaleString()}
+              />
+              <StatRow
+                theme={theme}
+                label="Chunks"
+                value={String(currentDoc.totalChunks)}
+              />
+              <StatRow
+                theme={theme}
+                label="Vector dims"
+                value={
+                  currentDoc.chunks.length > 0
+                    ? String(currentDoc.chunks[0].vectorDimensions)
+                    : '—'
+                }
+              />
+            </div>
+
+            <div style={cardStyle(theme)}>
+              <h3 style={cardLabelStyle(theme)}>How to use</h3>
+              <ul
+                style={{
+                  margin: 0,
+                  paddingLeft: 18,
+                  fontSize: 13,
+                  color: theme.textSecondary,
+                  lineHeight: 1.65,
+                }}
+              >
+                <li>
+                  Click "Open Comparison" to launch the side-by-side view.
+                </li>
+                <li>
+                  Hover any block on the right pane to locate it on the PDF.
+                </li>
+                <li>
+                  Blocks tagged "approximate" have unreliable bounding boxes
+                  from the parser.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div
+          style={{
+            ...cardStyle(theme),
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: 300,
+          }}
+        >
+          <p
+            style={{
+              fontSize: 13,
+              color: theme.textSecondary,
+              margin: 0,
+              textAlign: 'center',
+            }}
+          >
+            {ingestedDocs.length === 0
+              ? 'No ingested documents yet. Upload and ingest first.'
+              : 'Pick a document above to see its preview and stats.'}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const StatRow: React.FC<{ theme: Theme; label: string; value: string }> = ({
+  theme,
+  label,
+  value,
+}) => (
+  <div
+    style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'baseline',
+      gap: 12,
+      paddingBottom: 8,
+      borderBottom: `1px solid ${theme.separator}`,
+      fontSize: 13,
+    }}
+  >
+    <span style={{ color: theme.textSecondary }}>{label}</span>
+    <span
+      style={{
+        color: theme.textPrimary,
+        fontWeight: 600,
+        textAlign: 'right',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        maxWidth: 200,
+      }}
+      title={value}
+    >
+      {value}
+    </span>
+  </div>
+);
+
+interface PdfPreviewerProps {
+  url: string;
+}
+
+const PdfPreviewer: React.FC<PdfPreviewerProps> = ({ url }) => {
+  const [numPages, setNumPages] = useState(0);
+  return (
+    <Document
+      file={url}
+      onLoadSuccess={({ numPages: n }) => setNumPages(n)}
+      loading={
+        <div
+          style={{
+            color: 'rgba(60,60,67,0.6)',
+            fontSize: 13,
+          }}
+        >
+          Loading preview…
+        </div>
+      }
+      error={
+        <div
+          style={{
+            color: '#FF3B30',
+            fontSize: 13,
+            padding: 24,
+            textAlign: 'center',
+          }}
+        >
+          Preview unavailable — open comparison to view the document.
+        </div>
+      }
+    >
+      {numPages > 0 && (
+        <Page
+          pageNumber={1}
+          width={Math.min(560, window.innerWidth * 0.42)}
+          renderTextLayer={false}
+          renderAnnotationLayer={false}
+        />
+      )}
+    </Document>
+  );
+};
+
+// ─── Shared building blocks ───────────────────────────────────────────────────
+interface ChatLogProps {
+  theme: Theme;
+  log: ChatMessage[];
+  loading: boolean;
+  emptyTitle: string;
+  emptyDesc: string;
+  senderAI: string;
+  onToggleAudio: (m: ChatMessage) => void;
+  onSeek: (e: React.MouseEvent<HTMLDivElement>, m: ChatMessage) => void;
+}
+
+const ChatLog: React.FC<ChatLogProps> = ({
+  theme,
+  log,
+  loading,
+  emptyTitle,
+  emptyDesc,
+  senderAI,
+  onToggleAudio,
+  onSeek,
+}) => {
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [log.length, loading]);
+
+  const lastText = log.length > 0 ? log[log.length - 1].text : '';
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [lastText]);
+
+  return (
+    <div
+      style={{
+        flex: 1,
+        minHeight: 0,
+        overflowY: 'auto',
+        padding: 20,
+        background: theme.surfaceAlt,
+        border: `1px solid ${theme.separator}`,
+        borderRadius: theme.radiusLg,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 14,
+      }}
+    >
+      {log.length === 0 ? (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            textAlign: 'center',
+          }}
+        >
+          <h4
+            style={{
+              fontSize: 16,
+              fontWeight: 600,
+              color: theme.textPrimary,
+              margin: '0 0 6px 0',
+            }}
+          >
+            {emptyTitle}
+          </h4>
+          <p style={{ fontSize: 13, color: theme.textSecondary, margin: 0 }}>
+            {emptyDesc}
+          </p>
+        </div>
+      ) : (
+        log.map((m) => (
+          <ChatBubble
+            key={m.id}
+            theme={theme}
+            message={m}
+            senderAI={senderAI}
+            onToggleAudio={onToggleAudio}
+            onSeek={onSeek}
+          />
+        ))
+      )}
+      {loading && (
+        <div
+          style={{
+            alignSelf: 'flex-start',
+            background: theme.surface,
+            border: `1px solid ${theme.separator}`,
+            padding: '12px 16px',
+            borderRadius: theme.radiusMd,
+            display: 'flex',
+            gap: 6,
+            alignItems: 'center',
+          }}
+        >
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: theme.accent,
+              animation: 'pulse 1.2s ease-in-out infinite',
+            }}
+          />
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: theme.accent,
+              animation: 'pulse 1.2s ease-in-out 0.2s infinite',
+            }}
+          />
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: theme.accent,
+              animation: 'pulse 1.2s ease-in-out 0.4s infinite',
+            }}
+          />
+          <style>{`@keyframes pulse { 0%, 100% { opacity: 0.3 } 50% { opacity: 1 } }`}</style>
+        </div>
+      )}
+      <div ref={bottomRef} />
+    </div>
+  );
+};
+
+interface ChatBubbleProps {
+  theme: Theme;
+  message: ChatMessage;
+  senderAI: string;
+  onToggleAudio: (m: ChatMessage) => void;
+  onSeek: (e: React.MouseEvent<HTMLDivElement>, m: ChatMessage) => void;
+}
+
+const ChatBubble: React.FC<ChatBubbleProps> = ({
+  theme,
+  message,
+  senderAI,
+  onToggleAudio,
+  onSeek,
+}) => {
+  const isUser = message.sender === 'User';
+  return (
+    <div
+      style={{
+        alignSelf: isUser ? 'flex-end' : 'flex-start',
+        maxWidth: '78%',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: '0.6px',
+          textTransform: 'uppercase',
+          color: isUser ? theme.accent : theme.textSecondary,
+          paddingLeft: isUser ? 0 : 4,
+          paddingRight: isUser ? 4 : 0,
+          textAlign: isUser ? 'right' : 'left',
+        }}
+      >
+        {isUser ? 'You' : senderAI}
+      </span>
+      <div
+        style={{
+          padding: '12px 16px',
+          borderRadius: isUser
+            ? `${theme.radiusMd} ${theme.radiusMd} 4px ${theme.radiusMd}`
+            : `${theme.radiusMd} ${theme.radiusMd} ${theme.radiusMd} 4px`,
+          background: isUser ? theme.accentGradient : theme.surface,
+          border: isUser ? 'none' : `1px solid ${theme.separator}`,
+          color: isUser ? '#FFFFFF' : theme.textPrimary,
+          fontSize: 14,
+          lineHeight: 1.55,
+          boxShadow: isUser
+            ? `0 4px 16px ${theme.accentSoft}`
+            : '0 2px 8px rgba(0,0,0,0.04)',
+          fontFamily: theme.fontSans,
+          wordBreak: 'break-word',
+        }}
+      >
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm, remarkMath]}
+          rehypePlugins={[rehypeRaw, rehypeKatex]}
+          components={{
+            p: ({ children }) => (
+              <p style={{ margin: '0 0 8px 0' }}>{children}</p>
+            ),
+            table: ({ children }) => (
+              <div style={{ overflowX: 'auto', margin: '8px 0' }}>
+                <table
+                  style={{
+                    width: '100%',
+                    borderCollapse: 'collapse',
+                    fontSize: 13,
+                  }}
+                >
+                  {children}
+                </table>
+              </div>
+            ),
+            th: ({ children }) => (
+              <th
+                style={{
+                  border: `1px solid ${theme.separator}`,
+                  padding: '6px 10px',
+                  textAlign: 'left',
+                  background: isUser
+                    ? 'rgba(255,255,255,0.15)'
+                    : theme.surfaceAlt,
+                }}
+              >
+                {children}
+              </th>
+            ),
+            td: ({ children }) => (
+              <td
+                style={{
+                  border: `1px solid ${theme.separator}`,
+                  padding: '6px 10px',
+                }}
+              >
+                {children}
+              </td>
+            ),
+            code: ({ children }) => (
+              <code
+                style={{
+                  background: isUser
+                    ? 'rgba(255,255,255,0.2)'
+                    : theme.surfaceAlt,
+                  padding: '2px 6px',
+                  borderRadius: 6,
+                  fontFamily: theme.fontMono,
+                  fontSize: 12,
+                }}
+              >
+                {children}
+              </code>
+            ),
+          }}
+        >
+          {message.text}
+        </ReactMarkdown>
+      </div>
+      {!isUser && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '6px 12px',
+            background: theme.surface,
+            border: `1px solid ${theme.separator}`,
+            borderRadius: theme.radiusPill,
+            alignSelf: 'flex-start',
+          }}
+        >
+          <button
+            onClick={() => onToggleAudio(message)}
+            style={{
+              background: theme.accent,
+              color: '#FFFFFF',
+              border: 'none',
+              width: 24,
+              height: 24,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+            title={message.isPlaying ? 'Pause' : 'Play'}
+          >
+            {message.isPlaying ? (
+              <IconPause size={11} color="#FFFFFF" />
+            ) : (
+              <IconPlay size={11} color="#FFFFFF" />
+            )}
+          </button>
+          <div
+            onClick={(e) => onSeek(e, message)}
+            style={{
+              flex: 1,
+              minWidth: 120,
+              height: 3,
+              background: theme.separator,
+              borderRadius: 2,
+              position: 'relative',
+              overflow: 'hidden',
+              cursor: 'pointer',
+            }}
+          >
+            <div
+              style={{
+                height: '100%',
+                width: `${message.progress || 0}%`,
+                background: theme.accent,
+                transition: 'width 0.2s linear',
+              }}
+            />
+          </div>
+          <span
+            style={{
+              fontSize: 10,
+              color: theme.textTertiary,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {message.currentTimeFormatted || '0:00'} /{' '}
+            {message.durationFormatted || '0:00'}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+interface ChatInputProps {
+  theme: Theme;
+  input: string;
+  setInput: (v: string) => void;
+  onSend: () => void;
+  loading: boolean;
+  isRecording: boolean;
+  onStartRecording: () => void;
+  onStopRecording: () => void;
+  processingVoice: boolean;
+  placeholder: string;
+}
+
+const ChatInput: React.FC<ChatInputProps> = ({
+  theme,
+  input,
+  setInput,
+  onSend,
+  loading,
+  isRecording,
+  onStartRecording,
+  onStopRecording,
+  processingVoice,
+  placeholder,
+}) => (
+  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+    <input
+      style={{ ...inputStyle(theme), flex: 1 }}
+      value={input}
+      onChange={(e) => setInput(e.target.value)}
+      placeholder={processingVoice ? 'Transcribing…' : placeholder}
+      disabled={processingVoice}
+      onKeyDown={(e) => e.key === 'Enter' && onSend()}
+    />
+    <button
+      onClick={isRecording ? onStopRecording : onStartRecording}
+      disabled={processingVoice}
+      style={{
+        width: 44,
+        height: 44,
+        borderRadius: '50%',
+        border: 'none',
+        background: isRecording ? theme.danger : theme.surface,
+        color: isRecording ? '#FFFFFF' : theme.accent,
+        boxShadow: isRecording
+          ? `0 0 0 6px ${theme.dangerSoft}`
+          : '0 2px 8px rgba(0,0,0,0.06)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: processingVoice ? 'not-allowed' : 'pointer',
+        flexShrink: 0,
+        transition: `all 160ms ${theme.spring}`,
+      }}
+      title={isRecording ? 'Stop recording' : 'Record voice'}
+    >
+      {isRecording ? (
+        <IconStop size={16} color="#FFFFFF" />
+      ) : (
+        <IconMic size={18} color={theme.accent} />
+      )}
+    </button>
+    <button
+      onClick={onSend}
+      disabled={loading || !input.trim()}
+      style={{
+        width: 44,
+        height: 44,
+        borderRadius: '50%',
+        border: 'none',
+        background:
+          loading || !input.trim()
+            ? theme.separatorStrong
+            : theme.accentGradient,
+        color: '#FFFFFF',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
+        flexShrink: 0,
+        boxShadow:
+          loading || !input.trim() ? 'none' : `0 6px 18px ${theme.accentSoft}`,
+        transition: `all 160ms ${theme.spring}`,
+      }}
+      title="Send"
+    >
+      <IconSend size={16} color="#FFFFFF" />
+    </button>
+  </div>
+);
+
+export {};

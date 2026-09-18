@@ -1,0 +1,22 @@
+services:
+  pdf-parser:
+    build: ./services/pdf-parser
+    container_name: campus-pdf-parser
+    ports:
+      - '8000:8000'
+    environment:
+      ODL_PARSER_MODE: hybrid
+      ODL_HYBRID_URL: http://pdf-parser-hybrid:5002
+    depends_on:
+      - pdf-parser-hybrid
+    restart: unless-stopped
+
+  pdf-parser-hybrid:
+    image: python:3.11-slim
+    container_name: campus-pdf-parser-hybrid
+    ports:
+      - '5002:5002'
+    command: >
+      bash -c "pip install --no-cache-dir 'opendataloader-pdf[hybrid]' &&
+               opendataloader-pdf-hybrid --port 5002 --host 0.0.0.0"
+    restart: unless-stopped
