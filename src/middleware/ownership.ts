@@ -13,10 +13,6 @@ export const checkOwnership = (
 
   const loggedInStudentId = req.user?.student_id;
 
-  console.log(
-    `[Ownership Check] LoggedIn Student ID: ${loggedInStudentId} | Target Student ID: ${targetStudentId}`
-  );
-
   if (!loggedInStudentId) {
     return res
       .status(401)

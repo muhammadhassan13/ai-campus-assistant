@@ -32,6 +32,7 @@ import {
   IconSun,
   IconMoon,
   IconScan,
+  IconPrism,
 } from './icons';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -207,7 +208,7 @@ export default function App() {
     axios
       .get(`/api/documents/${comparisonDocumentId}/comparison`, {
         headers: { Authorization: `Bearer ${token}` },
-        timeout: 15000,
+        timeout: 30000,
       })
       .then((res) => {
         const data = res.data?.data;
@@ -1151,18 +1152,7 @@ export default function App() {
                   boxShadow: `0 8px 24px ${theme.accentSoft}`,
                 }}
               >
-                <svg
-                  width={26}
-                  height={26}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#FFFFFF"
-                  strokeWidth={2.2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.8 2.8M14.9 14.9l2.8 2.8M6.3 17.7l2.8-2.8M14.9 9.1l2.8-2.8" />
-                </svg>
+                <IconPrism size={28} color="#FFFFFF" strokeWidth={1.7} />
               </div>
               <h2
                 style={{
@@ -1173,7 +1163,7 @@ export default function App() {
                   letterSpacing: '-0.3px',
                 }}
               >
-                Welcome back
+                Welcome to Lumen
               </h2>
               <p
                 style={{
@@ -1182,7 +1172,7 @@ export default function App() {
                   margin: 0,
                 }}
               >
-                Sign in to your workspace
+                Assist
               </p>
             </div>
             <form

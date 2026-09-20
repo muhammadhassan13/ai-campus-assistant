@@ -14,10 +14,8 @@ export interface Theme {
   glassStrong: string;
   glassBorder: string;
   glassBorderStrong: string;
-  glassSpecular: string;
   glassShadow: string;
   glassShadowStrong: string;
-  glassBlur: string;
 
   // Solid surfaces
   surface: string;
@@ -55,14 +53,6 @@ export interface Theme {
   radiusXl: string;
   radiusPill: string;
 
-  // Spacing scale
-  space1: string;
-  space2: string;
-  space3: string;
-  space4: string;
-  space5: string;
-  space6: string;
-
   // Motion
   spring: string;
   ease: string;
@@ -85,47 +75,39 @@ export const liquidGlass: Theme = {
   glassStrong: 'rgba(255, 255, 255, 0.85)',
   glassBorder: 'rgba(255, 255, 255, 0.7)',
   glassBorderStrong: 'rgba(255, 255, 255, 0.9)',
-  glassSpecular: 'none',
   glassShadow: '0 2px 8px rgba(31, 38, 71, 0.05)',
   glassShadowStrong: '0 8px 24px rgba(31, 38, 71, 0.08)',
-  glassBlur: 'blur(20px)',
 
   surface: 'rgba(255, 255, 255, 0.65)',
   surfaceAlt: 'rgba(255, 255, 255, 0.45)',
   surfaceOverlay: 'rgba(255, 255, 255, 0.85)',
 
-  textPrimary: '#1C1C1E',
-  textSecondary: 'rgba(60, 60, 67, 0.62)',
-  textTertiary: 'rgba(60, 60, 67, 0.38)',
+  // Darkened for better contrast on light glass surfaces
+  textPrimary: '#14161A',
+  textSecondary: 'rgba(38, 42, 51, 0.82)',
+  textTertiary: 'rgba(38, 42, 51, 0.58)',
   textInverse: '#FFFFFF',
 
-  separator: 'rgba(60, 60, 67, 0.08)',
-  separatorStrong: 'rgba(60, 60, 67, 0.14)',
+  separator: 'rgba(60, 60, 67, 0.10)',
+  separatorStrong: 'rgba(60, 60, 67, 0.18)',
 
   accent: '#0A84FF',
   accentHover: '#0066D6',
   accentSoft: 'rgba(10, 132, 255, 0.12)',
   accentGradient: 'linear-gradient(135deg, #0A84FF 0%, #5E5CE6 100%)',
 
-  success: '#30B350',
-  successSoft: 'rgba(48, 179, 80, 0.12)',
-  warning: '#E08600',
-  warningSoft: 'rgba(224, 134, 0, 0.12)',
-  danger: '#E5342B',
-  dangerSoft: 'rgba(229, 52, 43, 0.12)',
+  success: '#218838',
+  successSoft: 'rgba(48, 179, 80, 0.14)',
+  warning: '#B26A00',
+  warningSoft: 'rgba(224, 134, 0, 0.14)',
+  danger: '#C8231A',
+  dangerSoft: 'rgba(229, 52, 43, 0.14)',
 
   radiusSm: '10px',
   radiusMd: '14px',
   radiusLg: '20px',
   radiusXl: '24px',
   radiusPill: '999px',
-
-  space1: '4px',
-  space2: '8px',
-  space3: '12px',
-  space4: '16px',
-  space5: '24px',
-  space6: '32px',
 
   spring: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
   ease: 'cubic-bezier(0.4, 0, 0.2, 1)',
@@ -148,11 +130,9 @@ export const deepSpace: Theme = {
   glassStrong: 'rgba(15, 23, 42, 0.95)',
   glassBorder: 'rgba(255, 255, 255, 0.08)',
   glassBorderStrong: 'rgba(255, 255, 255, 0.15)',
-  glassSpecular: 'none',
   glassShadow: '0 8px 32px rgba(31, 38, 135, 0.10)',
   glassShadowStrong:
     '0 20px 60px rgba(31, 38, 135, 0.14), 0 2px 8px rgba(31, 38, 135, 0.06)',
-  glassBlur: 'none',
 
   surface: '#1E293B',
   surfaceAlt: '#0F172A',
@@ -183,13 +163,6 @@ export const deepSpace: Theme = {
   radiusLg: '16px',
   radiusXl: '20px',
   radiusPill: '999px',
-
-  space1: '4px',
-  space2: '8px',
-  space3: '12px',
-  space4: '16px',
-  space5: '24px',
-  space6: '32px',
 
   spring: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
   ease: 'cubic-bezier(0.4, 0, 0.2, 1)',

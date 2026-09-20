@@ -1,693 +1,390 @@
-\`\`\`markdown
+# Lumen — AI Campus Assistant
 
-\# AI Campus Assistant
+A full-stack campus query platform with document understanding, conversational AI, voice interaction, and a visual document inspector.
 
-An intelligent campus query platform with document understanding, conversational AI, voice interaction, and a visual document inspector.
+---
 
-\## Table of Contents
+## Table of Contents
 
-\- \[What It Does\](#what-it-does)
+- [What It Does](#what-it-does)
+- [Tech Stack](#tech-stack)
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+- [Environment Variables](#environment-variables)
+- [Running the App](#running-the-app)
+- [Postman Workflow](#postman-workflow)
+- [Project Structure](#project-structure)
+- [Common Commands](#common-commands)
+- [What You Must Improvise](#what-you-must-improvise)
+- [License](#license)
 
-\- \[Who This Is For\](#who-this-is-for)
+---
 
-\- \[Tech Stack\](#tech-stack)
-
-\- \[Quick Start\](#quick-start)
-
-\- \[Project Structure\](#project-structure)
-
-\- \[Architecture Overview\](#architecture-overview)
-
-\- \[Features\](#features)
-
-\- \[Documentation Index\](#documentation-index)
-
-\- \[Common Commands\](#common-commands)
-
-\- \[Troubleshooting\](#troubleshooting)
-
-\- \[Glossary\](#glossary)
-
-\- \[License\](#license)
-
-\## What It Does
+## What It Does
 
 The system has four main features:
 
-1\. \*\*Documents Hub\*\* — Upload PDFs, extract their text and structure, generate vector embeddings, and prepare them for AI queries.
+1. **Documents Hub** — Upload PDFs, extract their text and structure, generate vector embeddings, and prepare them for AI queries.
+2. **General AI Chat** — A conversational assistant for coursework, coding, and general questions.
+3. **RAG & Voice Chat** — Ask questions about your uploaded documents. Supports typed and voice input, and reads answers aloud.
+4. **Visual Inspector** — Side-by-side view of a PDF and its extracted structure, with hover-to-locate highlighting.
 
-2\. \*\*General AI Chat\*\* — A conversational assistant for coursework, coding, and general questions.
+## Tech Stack
 
-3\. \*\*RAG & Voice Chat\*\* — Ask questions about your uploaded documents. Supports both typed and voice input, and reads answers aloud.
+| Layer            | Technology                                        |
+| ---------------- | ------------------------------------------------- |
+| Backend          | Node.js, Express, TypeScript                      |
+| Structured data  | PostgreSQL                                        |
+| Document storage | MongoDB Atlas                                     |
+| PDF parsing      | LlamaParse (LlamaCloud) + pdfjs                   |
+| Embeddings       | Xenova Transformers (local, 384-dim)              |
+| Chat models      | Groq (Llama / GPT-OSS)                            |
+| Voice            | Groq Whisper (STT), browser SpeechSynthesis (TTS) |
+| Frontend         | React, Vite, TypeScript                           |
 
-4\. \*\*Visual Inspector\*\* — Side-by-side view of a PDF and its extracted structure, with hover-to-locate highlighting.
+## Prerequisites
 
-\## Who This Is For
+- **Node.js 22.13+** (required by `pdfjs-dist@6`)
+- **PostgreSQL** (local or cloud)
+- **MongoDB Atlas** free cluster
+- **Groq API key** — https://console.groq.com
+- **LlamaCloud API key** — https://cloud.llamaindex.ai
 
-\- \*\*Students\*\*: Ask questions about lecture notes, textbooks, and course materials.
+## Setup
 
-\- \*\*Faculty\*\*: Build a searchable knowledge base from PDFs.
+### 1. Clone and install
 
-\- \*\*Developers\*\*: Extend the AI pipeline, add document types, integrate new models.
-
-\## Tech Stack
-
-| Layer | Technology |
-
-| --- | --- |
-
-| Backend | Node.js, Express, TypeScript |
-
-| Structured data | PostgreSQL |
-
-| Document storage | MongoDB |
-
-| PDF parsing | LlamaParse + pdfjs |
-
-| Embeddings | Xenova Transformers (local, 384-dim) |
-
-| Chat models | Groq (Llama) + Google Gemini |
-
-| Voice | Groq Whisper (STT), browser SpeechSynthesis (TTS) |
-
-| Frontend | React, Vite, TypeScript |
-
-\## Quick Start
-
-\### Prerequisites
-
-\- Node.js 20 or newer
-
-\- PostgreSQL (running locally or in the cloud)
-
-\- MongoDB Atlas account (free tier works)
-
-\- Groq API key — https://console.groq.com
-
-\- LlamaCloud API key — https://cloud.llamaindex.ai
-
-\- Google Gemini API key — https://aistudio.google.com
-
-\### Setup
-
-1\. Clone and install:
-
-\`\`\`bash
-
-git clone
-
+```bash
+git clone <repo-url>
 cd ai-campus-assistant
-
 npm install
-
-cd client && npm install && cd ..
-
-\`\`\`
-
-2\. Create \`.env\` in the project root:
-
-\`\`\`env
-
-PORT=3001
-
-JWT\_SECRET=replace-with-a-long-random-string
-
-\# PostgreSQL
-
-PGHOST=localhost
-
-PGPORT=5432
-
-PGUSER=postgres
-
-PGPASSWORD=your-password
-
-PGDATABASE=student\_db
-
-\# MongoDB Atlas
-
-MONGO\_URI=mongodb+srv://user:pass@cluster.mongodb.net/dbname
-
-\# AI providers
-
-GROQ\_API\_KEY=gsk\_...
-
-GROQ\_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
-
-GEMINI\_API\_KEY=...
-
-LLAMA\_CLOUD\_API\_KEY=llx-...
-
-\`\`\`
-
-3\. Initialize the database:
-
-\`\`\`bash
-
-npm run migrate
-
-npm run seed
-
-\`\`\`
-
-4\. Start everything (two terminals):
-
-\`\`\`bash
-
-\# Terminal 1 — backend
-
-npm run dev
-
-\# Terminal 2 — frontend
-
 cd client
+npm install
+cd ..
+```
 
+### 2. Create the database
+
+If using a local PostgreSQL:
+
+```bash
+createdb ai_campus_assistant
+```
+
+### 3. Create the `.env` file
+
+Copy the template in the next section to a file named `.env` at the **project root** (same folder as `package.json`).
+
+### 4. Initialize the database
+
+migrate and seed populate the database with dummy records.
+
+```bash
+npm run migrate
+npm run seed
+```
+
+### 5. Get external API keys
+
+- **Groq**: sign up at https://console.groq.com → API Keys → Create
+- **LlamaCloud**: sign up at https://cloud.llamaindex.ai → API Keys → Create
+- **MongoDB Atlas**: create a free M0 cluster, add a database user, whitelist your IP (Network Access → Add Current IP), then copy the connection string.
+
+## Environment Variables
+
+Place this file at the project root as `.env`:
+
+```env
+# Server
+PORT=3001
+JWT_SECRET=replace-with-a-long-random-string
+
+# PostgreSQL
+PGHOST=localhost
+PGPORT=5432
+PGUSER=postgres
+PGPASSWORD=your-postgres-password
+PGDATABASE=ai_campus_assistant
+
+# MongoDB Atlas
+MONGO_URI=mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/?retryWrites=true&w=majority
+
+# Groq
+GROQ_API_KEY=gsk_...
+GROQ_MODEL=openai/gpt-oss-120b
+USE_MOCK_AI=false
+
+# LlamaCloud
+LLAMA_CLOUD_API_KEY=llx-...
+```
+
+**Generating a JWT secret:**
+
+```bash
+node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+```
+
+## Running the App
+
+Two terminals.
+
+### Terminal 1 — Backend
+
+```bash
 npm run dev
+```
 
-\`\`\`
+Expected output:
 
-5\. Open http://localhost:5173
+```
+Connected to MongoDB successfully
+Server running on http://localhost:3001
+```
 
-Default login: \`hassan.naeem@student.campus.edu\` / \`Password123\`
+### Terminal 2 — Frontend
 
-\## Project Structure
+```bash
+cd client
+npm run dev
+```
 
-\`\`\`
+Expected output:
 
-src/ Backend source
+```
+VITE ready
+➜  Local:   http://localhost:5173/
+```
 
-app.ts Express app setup
+### Open the app
 
-server.ts Server entry point (starts MongoDB + HTTP)
+Go to **http://localhost:5173** and sign in with a seeded student account.
 
-config/ DB connections, prompts, DNS
+**Default seeded credentials:**
 
-controllers/ HTTP request handlers
+| Email                              | Password      |
+| ---------------------------------- | ------------- |
+| `hassan.naeem@student.campus.edu`  | `Password123` |
+| `shabih.haider@student.campus.edu` | `Password123` |
 
-middleware/ Auth, error, rate limiting
+## Postman Workflow
 
-models/ Mongoose schemas
+The app has no sign-up UI. Student accounts are created via Postman or curl.
 
-repositories/ Data access layer
+### Base URL
 
-routes/ API endpoints
+```
+http://localhost:3001/api
+```
 
-services/ Business logic
+### 1. Log in (to get a JWT)
 
-utils/ Embeddings, chunking, vectors
+**POST** `/students/login`
 
-client/ Frontend source
+Body (JSON):
 
-src/
+```json
+{
+  "email": "hassan.naeem@student.campus.edu",
+  "password": "Password123"
+}
+```
 
-App.tsx Main app with all 4 tabs
+Response:
 
-PdfComparator.tsx Visual inspector (PDF + markdown side-by-side)
+```json
+{
+  "message": "Login successful",
+  "token": "eyJhbGciOi...",
+  "student": { "student_id": 1, "name": "Muhammad Hassan Naeem", ... }
+}
+```
 
-main.tsx React entry
+Copy the `token` value. Use it as `Bearer <token>` in the `Authorization` header for all protected routes.
 
-sql/ PostgreSQL schema
+### 2. Create a new student
 
-docs/ Additional documentation
+**POST** `/students`
 
-uploads/ Runtime file storage (PDFs, markdown, audio)
+Body (JSON):
 
-\`\`\`
+```json
+{
+  "name": "Ali Khan",
+  "email": "ali.khan@student.campus.edu",
+  "password": "Password123",
+  "degree": "BS Computer Science",
+  "gpa": 3.5,
+  "status": "Active"
+}
+```
 
-\## Architecture Overview
+**Allowed values:**
 
-\`\`\`
+- `degree`: `BS Computer Science`, `BS Software Engineering`, `BS Data Science`, `BS Artificial Intelligence`, `Not specified`
+- `status`: `Active`, `Inactive`, `Graduated`, `Suspended`
 
-┌──────────────┐
+### 3. List all students
 
-│ Browser │
+**GET** `/students`
 
-│ React UI │
+No auth required.
 
-└──────┬───────┘
+### 4. Get one student
 
-│ HTTP
+**GET** `/students/:id`
 
-▼
+### 5. Update a student
 
-┌──────────────┐ ┌──────────────┐
+**PUT** `/students/:id` or **PATCH** `/students/:id`
 
-│ Express API │───────►│ PostgreSQL │ Students, conversations
+Auth: Bearer token of that same student (ownership check enforced).
 
-└──────┬───────┘ └──────────────┘
+### 6. Delete a student
 
-│
+**DELETE** `/students/:id`
 
-├───────────────► ┌──────────────┐
+Auth: Bearer token of that same student.
 
-│ │ MongoDB │ Documents, chunks, blocks
+### 7. Delete all students
 
-│ └──────────────┘
+**DELETE** `/students`
 
-│
+Auth: any valid token. Resets the ID sequence to 1.
 
-├───────────────► ┌──────────────┐
+### 8. Upload a document
 
-│ │ LlamaParse │ PDF → structured JSON
+**POST** `/documents/upload`
 
-│ └──────────────┘
+Auth: Bearer token.
 
-│
+Form-data:
 
-├───────────────► ┌──────────────┐
+| Key    | Type | Value    |
+| ------ | ---- | -------- |
+| `file` | File | your PDF |
 
-│ │ Groq │ Chat + Whisper STT
+Response includes the `documentId` you'll use in the next step.
 
-│ └──────────────┘
+### 9. Chunk and embed a document
 
-│
+**POST** `/documents/:id/chunk`
 
-└───────────────► ┌──────────────┐
+Auth: Bearer token.
 
-│ Xenova │ Local embeddings
+Body: `{}` (empty JSON is fine).
 
-└──────────────┘
+This sends the PDF to LlamaParse, extracts text + blocks, generates embeddings, and stores everything in MongoDB. Takes 30 seconds to several minutes.
 
-\`\`\`
+### 10. RAG chat
 
-\## Features
+**POST** `/documents/chat`
 
-\### 1. Documents Hub
+Auth: Bearer token.
 
-\*\*Where to find it:\*\* First tab in the top navigation.
+Body:
 
-\*\*What it does:\*\* Lets you upload PDF files and prepare them for AI queries.
+```json
+{
+  "query": "What is the dose for adults?",
+  "documentId": "<optional-document-id>",
+  "topK": 3
+}
+```
 
-\*\*Typical workflow:\*\*
+Omit `documentId` to search across all ingested documents.
 
-1\. Click \*\*Choose PDF Document\*\* and select a file.
+## Project Structure
 
-2\. Click \*\*Upload File\*\*.
+```
+src/                       Backend source
+  app.ts                   Express app setup
+  server.ts                Server entry point
+  config/                  DB connections, prompts
+  controllers/             HTTP request handlers
+  middleware/              Auth, error, rate limiting, ownership
+  models/                  Mongoose schemas
+  repositories/            Data access layer
+  routes/                  API endpoints
+  services/                Business logic
+    ai/                    AI service layer (live, mock, proxy)
+  scripts/                 migrate, seed
+  utils/                   Embeddings, vectors
 
-3\. Once uploaded, the document shows as "Staged (Unchunked)."
+client/                    Frontend source
+  src/
+    App.tsx                Main app with all 4 tabs
+    PdfComparator.tsx      Visual Inspector window
+    Sidebar.tsx            Navigation sidebar
+    main.tsx               React entry
+    theme.ts               Theme definitions
+    icons.tsx              SVG icon set
 
-4\. Click \*\*Ingest Vectors\*\* to process it. This sends the PDF to a parsing service, extracts text, tables, and layout information, breaks the content into small searchable pieces ("chunks"), converts each chunk into a mathematical fingerprint ("embedding"), and saves everything for later retrieval.
+sql/                       PostgreSQL schema reference
+docs/                      Additional documentation
+uploads/                   Runtime file storage (PDFs, markdown, audio)
+```
 
-5\. The document now shows as "Ingested" and can be queried.
+## Common Commands
 
-\*\*What the buttons do:\*\*
+| Command                      | Purpose                       |
+| ---------------------------- | ----------------------------- |
+| `npm run dev`                | Start backend with hot reload |
+| `npm run build`              | Compile TypeScript to `dist/` |
+| `npm start`                  | Run compiled backend          |
+| `npm run migrate`            | Reset PostgreSQL schema       |
+| `npm run seed`               | Insert test students          |
+| `cd client && npm run dev`   | Start frontend dev server     |
+| `cd client && npm run build` | Build production frontend     |
 
-| Button | What happens |
+## What You Must Improvise
 
-| --- | --- |
+If you're running this project on a fresh machine, these are the things that are **not** shipped with the code and must be set up by you.
 
-| \*\*Ingest Vectors\*\* | Processes the document — takes 30 seconds to several minutes |
+### Required (the app will not run without these)
 
-| \*\*Preview Chunks\*\* | Shows how the document was split into searchable pieces |
+| Item                                 | Why                                                                             |
+| ------------------------------------ | ------------------------------------------------------------------------------- |
+| **Node.js 22.13+**                   | `pdfjs-dist@6` requires it; older versions crash on startup                     |
+| **PostgreSQL instance**              | Local install or free cloud provider (Neon, Supabase)                           |
+| **MongoDB Atlas cluster**            | Free M0 tier works                                                              |
+| **Your IP whitelisted on Atlas**     | Without this, backend hangs ~10s then fails with `Failed to connect to MongoDB` |
+| **`.env` file at project root**      | With all fields filled in (see [Environment Variables](#environment-variables)) |
+| **Your Postgres password in `.env`** | The password field must match your local Postgres setup                         |
 
-| \*\*Purge Vectors\*\* | Removes the embeddings but keeps the original PDF |
+### If you received the `.env` from the project author
 
-| \*\*Delete\*\* | Removes the PDF, its parsed data, and all embeddings permanently |
+These fields carry over as-is — nothing to change:
 
-\### 2. General AI Chat
+- `JWT_SECRET`
+- `GROQ_API_KEY`
+- `GROQ_MODEL`
+- `USE_MOCK_AI`
+- `LLAMA_CLOUD_API_KEY`
+- `MONGO_URI` (the connection string works, but **his IP must be whitelisted on the cluster's Network Access page**)
+- All `PG*` fields **except** `PGPASSWORD`
 
-\*\*Where to find it:\*\* Second tab.
+These must be updated:
 
-\*\*What it does:\*\* A conversational assistant you can talk to about anything — coursework, coding, writing, explanations.
+- `PGPASSWORD` — replace with your own Postgres password
+- Your IP — added to Atlas Network Access (the author must do this from their Atlas dashboard, or you spin up your own free cluster)
 
-\*\*Features:\*\*
+### Optional (the app runs without these, degraded)
 
-\- Multi-turn memory: the assistant remembers the last few messages so follow-up questions work naturally.
+| Item                  | Behavior if missing                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------------------- |
+| `GROQ_API_KEY`        | Set `USE_MOCK_AI=true` in `.env` to get stub responses                                            |
+| `LLAMA_CLOUD_API_KEY` | Falls back to local pdfjs parsing (no OCR, no table extraction, no multi-column layout awareness) |
 
-\- Markdown rendering: responses can include headings, lists, tables, code blocks, and math formulas.
+### Common startup errors
 
-\- Voice input: click the microphone icon to speak instead of type.
+**`Failed to connect to MongoDB`** — Your IP isn't whitelisted. Find it at https://api.ipify.org and add it via Atlas → Network Access → Add IP Address.
 
-\- Read-aloud: click the play button on any response to hear it spoken.
+**`ECONNREFUSED 127.0.0.1:5432`** — PostgreSQL isn't running, or the password in `.env` is wrong.
 
-\- Rate limited: to prevent abuse, requests are limited to 5 per minute per user.
+**`ERR_REQUIRE_ESM` on startup** — You're on Node < 22.13. Upgrade.
 
-\### 3. RAG & Voice Chat
+**Port already in use** — Something else is on 3001 or 5173. Kill it, or change `PORT` in `.env` and `client/vite.config.ts`.
 
-\*\*Where to find it:\*\* Third tab.
-
-\*\*What it does:\*\* Answers questions using ONLY your uploaded documents, and cites its sources.
-
-\*\*RAG stands for Retrieval-Augmented Generation:\*\*
-
-1\. Your question is converted into an embedding.
-
-2\. The system finds the most similar chunks in your documents.
-
-3\. Those chunks are sent to the AI along with your question.
-
-4\. The AI answers using only those chunks as its source of truth.
-
-\*\*Features:\*\*
-
-\- Document scoping: select specific documents to query, or search across all.
-
-\- Voice mode: speak your question, hear the answer.
-
-\- Source citations: every fact in the answer points back to a specific chunk.
-
-\*\*Why use this instead of general chat?\*\* Because the general model may hallucinate. RAG grounds every answer in real text from your files.
-
-\### 4. Visual Inspector
-
-\*\*Where to find it:\*\* Fourth tab.
-
-\*\*What it does:\*\* Opens a new window showing a PDF side-by-side with its extracted structure.
-
-\*\*The two panes:\*\*
-
-| Left | Right |
-
-| --- | --- |
-
-| Original PDF rendered as an image | Extracted text as structured Markdown |
-
-\*\*The hover-to-locate:\*\*
-
-\- Hover any text block in the right pane.
-
-\- The corresponding region in the PDF lights up on the left.
-
-\*\*Warning tags:\*\*
-
-\- Most blocks show no warning. Hovering them draws a yellow rectangle at the exact PDF location.
-
-\- Some blocks show \*\*"⚠ approximate"\*\*. This means the parsing service returned a bounding box that can't be trusted — usually because the block spans multiple text columns. Hovering these shows a blue rectangle pointing at the nearest reliable block instead.
-
-\*\*Why some blocks are approximate:\*\* The parser uses a vision model to identify text regions. On documents with multiple columns (like medical leaflets or academic papers), the model sometimes merges physically adjacent regions into one large box. This is a parser limitation, not an app bug.
-
-\### 5. Voice Features
-
-Available in both chat tabs.
-
-\- Speech-to-text: the microphone button records your voice, sends it to a transcription service, and inserts the resulting text into the input box.
-
-\- Text-to-speech: every AI response has a play button. Click it to hear the response read aloud in a British-accented voice.
-
-\- Progress bar: you can scrub through playback, pause, and resume.
-
-\### 6. Search & Retrieval
-
-Behind the scenes, the RAG chat uses vector similarity search.
-
-\*\*Simple explanation:\*\*
-
-\- Every chunk of text is converted into a list of 384 numbers — a "vector".
-
-\- Two chunks with similar meaning have similar vectors.
-
-\- To answer a question, we compute the vector for the question and find the closest chunks.
-
-\- Those chunks are the "context" passed to the AI.
-
-\*\*What this means in practice:\*\* The system finds content that's semantically similar, not just word-matched. Asking "What is the dose for adults?" will find a chunk that says "Recommended Dosage in Adult Patients" even though the words differ.
-
-\### 7. Authentication
-
-Users sign in with an email and password. After login:
-
-\- A JWT token is stored in the browser.
-
-\- Every API request includes this token.
-
-\- Tokens expire after 24 hours.
-
-\- Users can only modify their own account.
-
-\### 8. What's NOT Included
-
-For transparency:
-
-\- No multi-user document sharing: documents are per-session, not shared between users.
-
-\- No document editing: once uploaded, documents are read-only.
-
-\- No OCR for handwritten text: printed text only.
-
-\- No multi-language chat: the AI responds in English.
-
-\- No mobile app: web only.
-
-\## Documentation Index
-
-\- \[docs/ARCHITECTURE.md\](docs/ARCHITECTURE.md) — How the pieces fit together
-
-\- \[docs/FEATURES.md\](docs/FEATURES.md) — What each feature does, for non-developers
-
-\- \[docs/GLOSSARY.md\](docs/GLOSSARY.md) — Terms like RAG, embeddings, bounding box
-
-\- \[docs/DEVELOPMENT.md\](docs/DEVELOPMENT.md) — Coding conventions, adding features
-
-\- \[docs/TROUBLESHOOTING.md\](docs/TROUBLESHOOTING.md) — Common issues and fixes
-
-\## Common Commands
-
-| Command | Purpose |
-
-| --- | --- |
-
-| \`npm run dev\` | Start backend with hot reload |
-
-| \`npm run build\` | Compile TypeScript to \`dist/\` |
-
-| \`npm start\` | Run compiled backend |
-
-| \`npm run migrate\` | Reset PostgreSQL schema |
-
-| \`npm run seed\` | Insert test students |
-
-| \`cd client && npm run dev\` | Start frontend dev server |
-
-| \`cd client && npm run build\` | Build production frontend |
-
-\## Troubleshooting
-
-\### "Failed to connect to MongoDB"
-
-\*\*Cause:\*\* MongoDB Atlas isn't accepting the connection.
-
-\*\*Check:\*\*
-
-1\. Is \`MONGO\_URI\` correct in \`.env\`?
-
-2\. Is your current public IP in the Atlas Network Access whitelist?
-
-\- Check: \`curl https://api.ipify.org\`
-
-\- Add: https://cloud.mongodb.com → Network Access → Add IP
-
-3\. For corporate networks, your DNS may be returning wrong IPs.
-
-\*\*Workaround:\*\* Add host overrides to \`C:\\Windows\\System32\\drivers\\etc\\hosts\`:
-
-\`\`\`
-
-52.x.x.x ac-\-shard-00-00..mongodb.net
-
-52.x.x.x ac-\-shard-00-01..mongodb.net
-
-52.x.x.x ac-\-shard-00-02..mongodb.net
-
-\`\`\`
-
-Get correct IPs via \`nslookup 8.8.8.8\`.
-
-\### "getaddrinfo ENOTFOUND api.cloud.llamaindex.ai"
-
-\*\*Cause:\*\* DNS resolution failure for LlamaParse.
-
-\*\*Check:\*\* \`nslookup api.cloud.llamaindex.ai 8.8.8.8\`
-
-\*\*Fix:\*\* Same as above — add host entry for \`api.cloud.llamaindex.ai\` with the resolved IP.
-
-\### "Ingest Vectors does nothing"
-
-\*\*Symptom:\*\* Click, brief pause, doc still shows "Staged."
-
-\*\*Cause:\*\* The parse returned 0 chunks.
-
-\*\*Check backend terminal for:\*\*
-
-\`\`\`
-
-\[LlamaParse\] markdown length = ...
-
-\[LlamaParse\] produced chunks: ...
-
-\`\`\`
-
-If \`markdown length = 0\` and \`blocks = 0\`, the parser returned nothing.
-
-\*\*Fix:\*\* Check the LlamaParse response shape. Modern versions don't return a top-level \`markdown\` field — the backend reconstructs it from blocks.
-
-\### "Visual Inspector shows blank right pane"
-
-\*\*Cause:\*\* The document was ingested before the current schema added the \`blocks\` field.
-
-\*\*Fix:\*\* Delete the document and re-upload.
-
-\### "Right pane shows text, left pane shows no highlight"
-
-\*\*Cause:\*\* The block's bounding box is unreliable (too large or too small).
-
-\*\*Behavior:\*\* The block gets an "⚠ approximate" tag and hover shows a blue rectangle pointing at the nearest reliable block.
-
-\*\*This is by design.\*\* The parser returned a bad bbox; we're honest about it.
-
-\### "Upload failed. 502 Bad Gateway"
-
-\*\*Cause:\*\* The backend crashed or is unreachable.
-
-\*\*Check backend terminal\*\* for the crash reason.
-
-\*\*Common causes:\*\*
-
-\- LlamaParse rejected a parameter (check for \`Unknown field:\` in the error)
-
-\- Timeout during parsing (increase \`timeoutMs\` in \`app.ts\`)
-
-\- The API key is invalid or expired
-
-\### "Login fails"
-
-\*\*Check:\*\*
-
-1\. Is the student seeded? Run \`npm run seed\`.
-
-2\. Is the email exactly \`hassan.naeem@student.campus.edu\`?
-
-3\. Is the password \`Password123\`?
-
-4\. Is PostgreSQL running?
-
-\### "Voice transcription doesn't work"
-
-\*\*Check:\*\*
-
-1\. Browser permissions — the mic icon should be visible and clickable.
-
-2\. Is \`GROQ\_API\_KEY\` valid? Whisper runs on Groq.
-
-3\. Is the audio file under Groq's size limit? (25 MB)
-
-\### "AI responses are outdated"
-
-\*\*Cause:\*\* LLM training data has a cutoff. Llama 4 Scout cuts off around August 2024.
-
-\*\*Fix options:\*\*
-
-1\. Switch to a newer model when available.
-
-2\. Add web search as a tool (not currently implemented).
-
-3\. For document-specific questions, use the RAG chat instead — it grounds answers in your files.
-
-\### "Server won't start"
-
-\*\*Check:\*\*
-
-1\. Port 3001 already in use? \`netstat -ano | findstr :3001\`
-
-2\. Is \`.env\` present and complete?
-
-3\. Does \`npm run build\` succeed? (TypeScript errors block startup)
-
-\## Glossary
-
-\### AI Terms
-
-\*\*Chunk\*\* — A small piece of a document, usually 300 to 500 characters. Documents are split into chunks because AI models have limited input size, and because retrieval works better with small units.
-
-\*\*Embedding\*\* — A list of numbers that represents the "meaning" of a piece of text. Two texts with similar meanings have similar embeddings. Our embeddings have 384 numbers.
-
-\*\*Vector search\*\* — Finding chunks whose embeddings are closest to a query embedding. "Closest" is measured by cosine similarity.
-
-\*\*Cosine similarity\*\* — A number between -1 and 1 that measures the angle between two vectors. 1 means identical, 0 means unrelated.
-
-\*\*RAG (Retrieval-Augmented Generation)\*\* — A technique that combines search with AI generation. Instead of asking the AI to answer from memory, we first find relevant chunks, then ask the AI to answer using only those chunks. This reduces hallucinations.
-
-\*\*Hallucination\*\* — When an AI confidently states something false. RAG reduces this by grounding answers in real text.
-
-\*\*Prompt\*\* — The text sent to an AI model. Includes the system prompt (instructions) and user input.
-
-\*\*System prompt\*\* — Special instructions that set the AI's persona and behavior.
-
-\*\*Few-shot examples\*\* — Example user/assistant exchanges included in the prompt to show the AI how to respond.
-
-\*\*Token\*\* — A small unit of text, roughly ¾ of a word.
-
-\*\*Temperature\*\* — A number controlling randomness. Low = deterministic, high = creative. We use 0.1 for RAG and 0.7 for chat.
-
-\### Document Parsing Terms
-
-\*\*Bounding box (bbox)\*\* — A rectangle on a page expressed as \`{ x, y, width, height }\`. Used to locate a text block visually.
-
-\*\*Block\*\* — A unit of extracted content (paragraph, heading, or table) with its own bounding box.
-
-\*\*LlamaParse\*\* — A cloud service that converts PDFs into structured data. Handles OCR, table extraction, and layout analysis.
-
-\*\*Premium mode\*\* — A LlamaParse setting that uses vision models for better layout understanding. Trade-off: more accurate but sometimes merges multi-column regions.
-
-\*\*Auto mode\*\* — A LlamaParse setting that picks per-page strategies automatically. Often better for multi-column documents.
-
-\*\*OCR (Optical Character Recognition)\*\* — Converting images of text into actual text characters. Needed for scanned PDFs.
-
-\*\*Layout-aware bounding box\*\* — An alternative bbox field that provides per-column rectangles for blocks that span multiple columns.
-
-\### Web Development Terms
-
-\*\*API endpoint\*\* — A URL that the frontend calls to get data.
-
-\*\*Controller\*\* — A function that handles an HTTP request.
-
-\*\*Service\*\* — A function that implements business logic. Doesn't know about HTTP.
-
-\*\*Repository\*\* — A function that queries the database.
-
-\*\*Middleware\*\* — Code that runs between receiving a request and calling the handler.
-
-\*\*JWT (JSON Web Token)\*\* — A signed string the server issues on login. The client sends it back on every request to prove identity.
-
-\*\*CORS (Cross-Origin Resource Sharing)\*\* — A browser security policy.
-
-\*\*Vite\*\* — A build tool and dev server for React apps.
-
-\*\*Mongoose\*\* — A library for talking to MongoDB.
-
-\*\*pg (node-postgres)\*\* — A library for talking to PostgreSQL.
-
-\### MongoDB Terms
-
-\*\*Document\*\* — A single record in MongoDB. Stored as JSON-like objects.
-
-\*\*Collection\*\* — A group of documents, similar to a table in SQL.
-
-\*\*Schema\*\* — A definition of what fields a document can have and their types.
-
-\*\*ObjectId\*\* — A unique identifier MongoDB generates for every document.
-
-\### Async & Concurrency Terms
-
-\*\*Promise\*\* — A value that will be available in the future.
-
-\*\*async/await\*\* — Syntax for writing Promise-based code as if it were synchronous.
-
-\*\*requestAnimationFrame (rAF)\*\* — A browser API that runs a function before the next repaint. Used to throttle expensive updates.
-
-\*\*Debounce\*\* — Delaying an action until input has stopped.
-
-\*\*Throttle\*\* — Limiting how often an action can run.
-
-\### Visual Terms
-
-\*\*Overlay\*\* — An HTML element layered on top of another.
-
-\*\*Canvas\*\* — An HTML element that renders 2D graphics.
-
-\*\*Scale factor\*\* — The ratio between rendered size and source size.
-
-\## License
+## License
 
 ISC
-
-\`\`\`

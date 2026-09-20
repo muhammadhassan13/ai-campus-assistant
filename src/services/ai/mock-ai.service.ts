@@ -2,30 +2,13 @@ import { AIRepository } from '../../repositories/ai.repository.js';
 import { type IAIService } from './ai.interface.js';
 
 export class MockAIService implements IAIService {
-  private getSmartMockResponse(prompt: string): string {
-    const lower = prompt.toLowerCase();
-
-    if (lower.includes('transaction')) {
-      return '[Mock AI]: A database transaction is a single, indivisible unit of work that executes multiple operations as an "all-or-nothing" sequence, ensuring data integrity through ACID properties.';
-    }
-
-    if (lower.includes('sql') || lower.includes('database')) {
-      return '[Mock AI]: A database is an organized collection of structured data managed by a DBMS (like PostgreSQL) for quick retrieval, insertion, and manipulation.';
-    }
-
-    if (lower.includes('assignment') || lower.includes('course')) {
-      return '[Mock AI]: You can view your enrolled courses and upcoming assignments through the student dashboard menu.';
-    }
-
-    return `[Mock AI]: Received prompt: "${prompt}". (Running in local offline mode).`;
-  }
-
   async generateResponse(studentId: number, prompt: string): Promise<string> {
     // 1. Log user prompt via Repository
     await AIRepository.saveMessage(studentId, 'user', prompt);
 
-    // 2. Generate response matching prompt context
-    const responseText = this.getSmartMockResponse(prompt);
+    // 2. Return a generic stub response. This service is only reached
+    //    when the primary (Groq) service is unavailable.
+    const responseText = `[Mock AI]: The AI service is temporarily unavailable. Received your message: "${prompt}".`;
 
     // 3. Log model response via Repository
     await AIRepository.saveMessage(studentId, 'model', responseText);

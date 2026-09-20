@@ -8,7 +8,7 @@ import {
   IconSun,
   IconMoon,
   IconLogout,
-  IconSparkle,
+  IconPrism,
   IconChevronDown,
 } from './icons';
 
@@ -31,7 +31,11 @@ interface NavItem {
 }
 
 const SIDEBAR_STORAGE_KEY = 'ui_sidebar_expanded';
-const ANIM_MS = 200;
+const ANIM_MS = 220;
+const RAIL_WIDTH = 68; // collapsed width
+const EXPANDED_WIDTH = 236;
+const OUTER_PAD = 12; // padding on the <aside>
+const SLOT = 36; // single unified icon slot used by brand, nav, footer
 
 function readStoredExpanded(): boolean {
   try {
@@ -70,16 +74,74 @@ export default function Sidebar({
   ];
 
   const isDark = theme.name === 'deep-space';
-  const width = expanded ? 240 : 72;
+  const width = expanded ? EXPANDED_WIDTH : RAIL_WIDTH;
 
+  // Padding that puts the 36px slot at the visual center of the rail.
+  // aside has OUTER_PAD on each side, so content width = width - 2*OUTER_PAD.
+  const contentWidth = width - OUTER_PAD * 2;
+  const collapsedRowPad = Math.max(0, (contentWidth - SLOT) / 2);
+
+  // Labels: GPU-only transitions, no layout thrash.
   const labelStyle: React.CSSProperties = {
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     opacity: expanded ? 1 : 0,
-    maxWidth: expanded ? 200 : 0,
-    transition: `opacity 140ms ${theme.ease}, max-width ${ANIM_MS}ms ${theme.ease}`,
+    transform: expanded ? 'translateX(0)' : 'translateX(-6px)',
+    transition: `opacity ${ANIM_MS}ms ${theme.ease}, transform ${ANIM_MS}ms ${theme.ease}, margin-left ${ANIM_MS}ms ${theme.ease}`,
     pointerEvents: expanded ? 'auto' : 'none',
+    minWidth: 0,
+    flex: 1,
+    marginLeft: expanded ? 10 : 0,
   };
+
+  const rowBase: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    height: 40,
+    borderRadius: theme.radiusSm,
+    border: 'none',
+    cursor: 'pointer',
+    textAlign: 'left',
+    fontSize: 13,
+    fontFamily: theme.fontSans,
+    position: 'relative',
+    boxSizing: 'border-box',
+    paddingLeft: expanded ? 4 : collapsedRowPad,
+    paddingRight: expanded ? 12 : collapsedRowPad,
+    transition: `background ${ANIM_MS}ms ${theme.ease}, color ${ANIM_MS}ms ${theme.ease}, padding-left ${ANIM_MS}ms ${theme.ease}, padding-right ${ANIM_MS}ms ${theme.ease}`,
+  };
+
+  const slotStyle: React.CSSProperties = {
+    width: SLOT,
+    height: SLOT,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    position: 'relative',
+  };
+
+  // Brand row uses the exact same padding math as nav/footer → all slots align.
+  const brandRowStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    height: 40,
+    paddingLeft: expanded ? 4 : collapsedRowPad,
+    paddingRight: expanded ? 12 : collapsedRowPad,
+    paddingTop: 8,
+    paddingBottom: 16,
+    borderBottom: `1px solid ${theme.separator}`,
+    transition: `padding-left ${ANIM_MS}ms ${theme.ease}, padding-right ${ANIM_MS}ms ${theme.ease}`,
+    boxSizing: 'border-box',
+  };
+
+  const footerRowStyle = (): React.CSSProperties => ({
+    ...rowBase,
+    color: theme.textSecondary,
+    background: 'transparent',
+    fontWeight: 500,
+    fontSize: 12,
+  });
 
   return (
     <aside
@@ -88,50 +150,44 @@ export default function Sidebar({
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        gap: 12,
-        padding: expanded ? 16 : 12,
+        padding: OUTER_PAD,
         background: theme.glassBase,
         border: `1px solid ${theme.glassBorder}`,
         borderRadius: theme.radiusXl,
         boxShadow: theme.glassShadowStrong,
         fontFamily: theme.fontSans,
         overflow: 'hidden',
-        transition: `width ${ANIM_MS}ms ${theme.ease}, padding ${ANIM_MS}ms ${theme.ease}`,
+        transition: `width ${ANIM_MS}ms ${theme.ease}`,
         flexShrink: 0,
         boxSizing: 'border-box',
+        willChange: 'width',
       }}
     >
       {/* Brand */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: expanded ? '8px 8px 16px 8px' : '8px 0 16px 0',
-          borderBottom: `1px solid ${theme.separator}`,
-          justifyContent: expanded ? 'flex-start' : 'center',
-        }}
-      >
-        <div
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 12,
-            background: theme.accentGradient,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: `0 4px 14px ${theme.accentSoft}`,
-            flexShrink: 0,
-          }}
-        >
-          <IconSparkle size={18} color="#FFFFFF" strokeWidth={2.2} />
+      <div style={brandRowStyle}>
+        <div style={slotStyle}>
+          <div
+            style={{
+              width: SLOT,
+              height: SLOT,
+              borderRadius: 11,
+              background: theme.accentGradient,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: `0 4px 14px ${theme.accentSoft}`,
+              flexShrink: 0,
+            }}
+          >
+            <IconPrism size={20} color="#FFFFFF" strokeWidth={1.7} />
+          </div>
         </div>
         <div
           style={{
             ...labelStyle,
-            flex: expanded ? 1 : 0,
-            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
           }}
         >
           <div
@@ -140,22 +196,23 @@ export default function Sidebar({
               fontWeight: 700,
               color: theme.textPrimary,
               letterSpacing: '-0.2px',
-              whiteSpace: 'nowrap',
+              lineHeight: 1.15,
             }}
           >
-            Campus.AI
+            Lumen
           </div>
           <div
             style={{
               fontSize: 10,
               color: theme.textTertiary,
-              letterSpacing: '0.3px',
+              letterSpacing: '0.4px',
               textTransform: 'uppercase',
               fontWeight: 600,
-              whiteSpace: 'nowrap',
+              lineHeight: 1.2,
+              marginTop: 1,
             }}
           >
-            Workspace
+            Assist
           </div>
         </div>
       </div>
@@ -167,6 +224,7 @@ export default function Sidebar({
           flexDirection: 'column',
           gap: 4,
           flex: 1,
+          paddingTop: 12,
           overflow: 'hidden',
         }}
       >
@@ -179,22 +237,10 @@ export default function Sidebar({
               onClick={() => onNavigate(item.id)}
               title={!expanded ? item.label : undefined}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: expanded ? 12 : 0,
-                padding: expanded ? '10px 12px' : '10px 0',
-                borderRadius: theme.radiusSm,
-                border: 'none',
-                cursor: 'pointer',
-                textAlign: 'left',
+                ...rowBase,
                 background: isActive ? theme.accentSoft : 'transparent',
                 color: isActive ? theme.accent : theme.textSecondary,
-                fontSize: 13,
                 fontWeight: isActive ? 600 : 500,
-                fontFamily: theme.fontSans,
-                transition: `background 160ms ${theme.ease}, color 160ms ${theme.ease}, padding ${ANIM_MS}ms ${theme.ease}, gap ${ANIM_MS}ms ${theme.ease}`,
-                justifyContent: expanded ? 'flex-start' : 'center',
-                position: 'relative',
               }}
               onMouseEnter={(e) => {
                 if (!isActive) {
@@ -209,24 +255,41 @@ export default function Sidebar({
                 }
               }}
             >
-              <IconCmp
-                size={18}
-                color={isActive ? theme.accent : theme.textSecondary}
-                strokeWidth={1.9}
-              />
-              <span
-                style={{
-                  ...labelStyle,
-                  flex: expanded ? 1 : 0,
-                  minWidth: 0,
-                }}
-              >
-                {item.label}
+              <span style={slotStyle}>
+                <IconCmp
+                  size={18}
+                  color={isActive ? theme.accent : theme.textSecondary}
+                  strokeWidth={1.9}
+                />
+                {!expanded && item.badge !== undefined && item.badge > 0 && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: -2,
+                      right: -2,
+                      fontSize: 9,
+                      fontWeight: 700,
+                      padding: '1px 5px',
+                      borderRadius: 6,
+                      background: theme.accent,
+                      color: '#FFFFFF',
+                      minWidth: 16,
+                      textAlign: 'center',
+                      lineHeight: 1.3,
+                      boxShadow: `0 2px 6px ${theme.accentSoft}`,
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    {item.badge}
+                  </span>
+                )}
               </span>
+              <span style={labelStyle}>{item.label}</span>
               {item.badge !== undefined && item.badge > 0 && (
                 <span
                   style={{
-                    ...labelStyle,
+                    opacity: expanded ? 1 : 0,
+                    transition: `opacity ${ANIM_MS}ms ${theme.ease}`,
                     flexShrink: 0,
                     fontSize: 10,
                     fontWeight: 700,
@@ -240,26 +303,7 @@ export default function Sidebar({
                     color: isActive ? '#FFFFFF' : theme.textSecondary,
                     minWidth: expanded ? 18 : 0,
                     textAlign: 'center',
-                  }}
-                >
-                  {item.badge}
-                </span>
-              )}
-              {!expanded && item.badge !== undefined && item.badge > 0 && (
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: 4,
-                    right: 10,
-                    fontSize: 9,
-                    fontWeight: 700,
-                    padding: '1px 5px',
-                    borderRadius: 6,
-                    background: theme.accent,
-                    color: '#FFFFFF',
-                    minWidth: 16,
-                    textAlign: 'center',
-                    lineHeight: 1.3,
+                    marginLeft: expanded ? 6 : 0,
                   }}
                 >
                   {item.badge}
@@ -285,7 +329,7 @@ export default function Sidebar({
           title={
             !expanded ? (isDark ? 'Liquid Glass' : 'Deep Space') : undefined
           }
-          style={footerButtonStyle(theme, isDark, expanded)}
+          style={footerRowStyle()}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = isDark
               ? 'rgba(255,255,255,0.04)'
@@ -295,19 +339,14 @@ export default function Sidebar({
             e.currentTarget.style.background = 'transparent';
           }}
         >
-          {isDark ? (
-            <IconSun size={18} color={theme.textSecondary} />
-          ) : (
-            <IconMoon size={18} color={theme.textSecondary} />
-          )}
-          <span
-            style={{
-              ...labelStyle,
-              flex: expanded ? 1 : 0,
-              minWidth: 0,
-              textAlign: 'left',
-            }}
-          >
+          <span style={slotStyle}>
+            {isDark ? (
+              <IconSun size={18} color={theme.textSecondary} />
+            ) : (
+              <IconMoon size={18} color={theme.textSecondary} />
+            )}
+          </span>
+          <span style={labelStyle}>
             {isDark ? 'Liquid Glass' : 'Deep Space'}
           </span>
         </button>
@@ -315,7 +354,7 @@ export default function Sidebar({
         <button
           onClick={onSignOut}
           title={!expanded ? 'Sign Out' : undefined}
-          style={footerButtonStyle(theme, isDark, expanded)}
+          style={footerRowStyle()}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = theme.dangerSoft;
             e.currentTarget.style.color = theme.danger;
@@ -325,22 +364,16 @@ export default function Sidebar({
             e.currentTarget.style.color = theme.textSecondary;
           }}
         >
-          <IconLogout size={18} color="currentColor" />
-          <span
-            style={{
-              ...labelStyle,
-              flex: expanded ? 1 : 0,
-              minWidth: 0,
-            }}
-          >
-            Sign Out
+          <span style={slotStyle}>
+            <IconLogout size={18} color="currentColor" />
           </span>
+          <span style={labelStyle}>Sign Out</span>
         </button>
 
         <button
           onClick={() => setExpanded((v) => !v)}
           title={expanded ? 'Collapse sidebar' : 'Expand sidebar'}
-          style={footerButtonStyle(theme, isDark, expanded)}
+          style={footerRowStyle()}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = isDark
               ? 'rgba(255,255,255,0.04)'
@@ -350,53 +383,22 @@ export default function Sidebar({
             e.currentTarget.style.background = 'transparent';
           }}
         >
-          <span
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transform: expanded ? 'rotate(90deg)' : 'rotate(-90deg)',
-              transition: `transform ${ANIM_MS}ms ${theme.ease}`,
-              flexShrink: 0,
-            }}
-          >
-            <IconChevronDown size={18} color={theme.textSecondary} />
+          <span style={slotStyle}>
+            <span
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transform: expanded ? 'rotate(90deg)' : 'rotate(-90deg)',
+                transition: `transform ${ANIM_MS}ms ${theme.ease}`,
+              }}
+            >
+              <IconChevronDown size={18} color={theme.textSecondary} />
+            </span>
           </span>
-          <span
-            style={{
-              ...labelStyle,
-              flex: expanded ? 1 : 0,
-              minWidth: 0,
-              textAlign: 'left',
-            }}
-          >
-            Collapse
-          </span>
+          <span style={labelStyle}>Collapse</span>
         </button>
       </div>
     </aside>
   );
-}
-
-function footerButtonStyle(
-  theme: Theme,
-  _isDark: boolean,
-  expanded: boolean
-): React.CSSProperties {
-  return {
-    display: 'flex',
-    alignItems: 'center',
-    gap: expanded ? 12 : 0,
-    padding: expanded ? '10px 12px' : '10px 0',
-    borderRadius: theme.radiusSm,
-    border: 'none',
-    cursor: 'pointer',
-    background: 'transparent',
-    color: theme.textSecondary,
-    fontSize: 12,
-    fontWeight: 500,
-    fontFamily: theme.fontSans,
-    transition: `background 160ms ${theme.ease}, color 160ms ${theme.ease}, padding ${ANIM_MS}ms ${theme.ease}, gap ${ANIM_MS}ms ${theme.ease}`,
-    justifyContent: expanded ? 'flex-start' : 'center',
-  };
 }

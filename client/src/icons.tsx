@@ -21,13 +21,30 @@ const base = (
   strokeLinejoin: 'round' as const,
 });
 
-export const IconSparkle = ({
+/**
+ * Lumen brand mark — a faceted prism/gem.
+ * Designed to read well at 16–20px and hold up inside a filled gradient tile.
+ */
+export const IconPrism = ({
   size = 18,
   color = 'currentColor',
-  strokeWidth = 1.8,
+  strokeWidth = 1.6,
 }: IconProps) => (
-  <svg {...base(size, color, strokeWidth)}>
-    <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.8 2.8M14.9 14.9l2.8 2.8M6.3 17.7l2.8-2.8M14.9 9.1l2.8-2.8" />
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={color}
+    strokeWidth={strokeWidth}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M12 2.5 4.2 9.1a1 1 0 0 0-.34.75V19a1.5 1.5 0 0 0 1.5 1.5h13.28a1.5 1.5 0 0 0 1.5-1.5v-9.15a1 1 0 0 0-.34-.75L12 2.5Z" />
+    <path d="M12 2.5v18" />
+    <path d="M4.5 9.4 12 12l7.5-2.6" />
+    <path d="M4.5 9.4 8 20.5" />
+    <path d="M19.5 9.4 16 20.5" />
   </svg>
 );
 
@@ -60,17 +77,6 @@ export const IconBrain = ({
   <svg {...base(size, color, strokeWidth)}>
     <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44A2.5 2.5 0 0 1 4.5 17c0-1.1.7-2.03 1.68-2.36A2.5 2.5 0 0 1 4.5 12c0-1.1.7-2.03 1.68-2.36A2.5 2.5 0 0 1 4.5 7c0-1.1.7-2.03 1.68-2.36A2.5 2.5 0 0 1 9.5 2z" />
     <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44A2.5 2.5 0 0 0 19.5 17c0-1.1-.7-2.03-1.68-2.36A2.5 2.5 0 0 0 19.5 12c0-1.1-.7-2.03-1.68-2.36A2.5 2.5 0 0 0 19.5 7c0-1.1-.7-2.03-1.68-2.36A2.5 2.5 0 0 0 14.5 2z" />
-  </svg>
-);
-
-export const IconSearch = ({
-  size = 18,
-  color = 'currentColor',
-  strokeWidth = 1.8,
-}: IconProps) => (
-  <svg {...base(size, color, strokeWidth)}>
-    <circle cx="11" cy="11" r="7" />
-    <path d="M21 21l-4.3-4.3" />
   </svg>
 );
 
