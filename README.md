@@ -22,12 +22,79 @@ A full-stack campus query platform with document understanding, conversational A
 
 ## What It Does
 
-The system has four main features:
+The system has four main features, plus a parsing quality showcase that demonstrates how the underlying document pipeline handles structured content.
 
-1. **Documents Hub** — Upload PDFs, extract their text and structure, generate vector embeddings, and prepare them for AI queries.
-2. **General AI Chat** — A conversational assistant for coursework, coding, and general questions.
-3. **RAG & Voice Chat** — Ask questions about your uploaded documents. Supports typed and voice input, and reads answers aloud.
-4. **Visual Inspector** — Side-by-side view of a PDF and its extracted structure, with hover-to-locate highlighting.
+### 1. Documents Hub
+
+The Documents Hub is where every document enters the system and gets prepared for AI retrieval. When you upload a PDF, the backend sends it to LlamaParse for layout-aware text extraction, then splits the extracted content into semantically coherent chunks, and finally converts each chunk into a 384-dimensional vector embedding using a local Xenova transformer model. All of this happens asynchronously — the hub shows you a live status for each document, indicating whether it is still staged (uploaded but not yet processed) or fully ingested (chunked and embedded). From the hub, you can also purge a document's embeddings without deleting the original file, or permanently remove the document and all associated data. The goal is transparency: you should always be able to see exactly what the AI will be retrieving from, and to fix or reset anything that looks wrong.
+
+**Uploading a PDF to the Documents Hub**
+
+![Upload a PDF to the Documents Hub](docs/screenshots/upload-pdf.png)
+
+This view shows the upload panel at the top of the Documents Hub. You select a PDF from your machine, and the hub stores the file on disk while recording its metadata in MongoDB. The document appears immediately in the indexed documents list below, marked as "Staged" until you trigger ingestion.
+
+**Previewing the generated chunks**
+
+![Preview the chunks generated from an uploaded PDF](docs/screenshots/preview-chunks.png)
+
+Once a document has been ingested, you can expand it to inspect every chunk that was generated. Each chunk shows its index, character count, vector dimensions, and full text. This is the same content the RAG pipeline retrieves from at query time, which means you can verify that the chunking was sensible — tables intact, paragraphs unbroken — before ever asking the AI a question about the document.
+
+### 2. General AI Chat
+
+The General AI Chat is a conversational assistant for anything that isn't tied to a specific document — coursework questions, coding problems, conceptual explanations, or general queries. It maintains a rolling memory of the last five messages, so follow-up questions can rely on context from earlier in the same conversation. The assistant is backed by a three-layer service architecture: a live service that calls Groq with streaming responses, a mock service that returns graceful stub responses when the live service is unavailable, and a proxy that selects between them. Responses are rendered as Markdown, including support for code blocks, tables, and LaTeX-style math. Each AI response also has a built-in text-to-speech control, so you can listen to an answer rather than read it.
+
+**Asking a general question**
+
+![General AI chat responding to a query](docs/screenshots/ai-chat-1.png)
+
+This is the first message in a conversation. The user asks a technical question, and the assistant responds with a structured, formatted answer. The Markdown renderer handles headings, inline code, and lists so the response is easy to scan rather than a wall of plain text.
+
+**Following up in the same conversation**
+
+![General AI chat continuing the conversation](docs/screenshots/ai-chat-2.png)
+
+The second message demonstrates conversation memory. The assistant has access to the previous exchange and can answer follow-up questions that depend on it — pronouns, abbreviations, and implicit references all resolve correctly because the prior messages are re-injected into the prompt on every turn.
+
+### 3. RAG & Voice Chat
+
+The RAG & Voice Chat is where the retrieval-augmented generation pipeline comes into play. Instead of asking the model to answer from its training data, this mode embeds your question, searches for the most similar chunks across your ingested documents, and instructs the model to answer using only those chunks as source material. If no chunk clears the relevance threshold, the assistant says it doesn't know rather than inventing an answer — a deliberate design choice to prevent hallucination. The same interface accepts both typed and spoken input: you can record a voice query in the browser, which is sent to Groq's Whisper model for transcription, and the resulting transcript flows through the exact same RAG pipeline as a typed question. Answers are read aloud using the browser's SpeechSynthesis API with a British female voice where available.
+
+**Querying your documents**
+
+![RAG chat answering a question grounded in an uploaded document](docs/screenshots/rag-chat.png)
+
+This view shows a typed query and the assistant's response, grounded in the retrieved chunks. Because the assistant is instructed to cite its sources, the answer reflects what is actually in the document rather than what the model might have learned during training. The retrieval step is the reason the answer is trustworthy.
+
+**Voice input and spoken responses**
+
+![RAG chat with voice input and text-to-speech output](docs/screenshots/rag-and-voice.png)
+
+The same pipeline, driven by voice instead of typing. The browser captures the microphone input, uploads it to the transcription endpoint, and inserts the resulting text into the chat input. The assistant's response is then read back using the browser's native speech synthesis, closing the full audio round-trip.
+
+### 4. Visual Inspector
+
+The Visual Inspector is a diagnostic tool for understanding how well the document parser understood your PDF. It opens in a separate window and places the original PDF on the left and the extracted markdown on the right. Hovering any block in the markdown highlights the corresponding region on the PDF, so you can see exactly which part of the page produced which piece of text. When the parser returns unreliable bounding boxes — which happens on multi-column layouts — the interface flags those blocks as "approximate" rather than pretending the geometry is trustworthy. This makes the inspector genuinely useful: it tells you where to trust the extraction and where to double-check it by hand.
+
+![Visual Inspector showing side-by-side PDF and extracted markdown](docs/screenshots/visual-inspector.png)
+
+This capture shows the side-by-side layout in action. The PDF on the left is rendered by React-PDF, and the markdown on the right is rendered as a sequence of hoverable blocks. The highlighting is driven by bounding boxes returned by LlamaParse, scaled to the rendered PDF dimensions, with fallback logic for cases where the parser's geometry is imprecise.
+
+### Parsing Quality Showcase
+
+These two captures demonstrate how the underlying document pipeline handles two very different kinds of content — structured tables and free-form text blocks. Both come from the same parsing pipeline, but they stress different parts of it: tables require preserving row-and-column structure through chunking, while text blocks require respecting paragraph boundaries.
+
+**Table parsing**
+
+![Extracted table from a parsed PDF](docs/screenshots/table-parsing.png)
+
+Tables are the hardest thing to chunk correctly, because splitting a table across chunks destroys the relationship between rows and headers. The chunking logic has a hard rule that tables are never split, no matter how large they grow. This capture shows the result: the extracted table is preserved as a coherent unit, with its structure intact, ready to be embedded and retrieved as a single semantic whole.
+
+**Text parsing**
+
+![Extracted text blocks from a parsed PDF](docs/screenshots/text-parsing.png)
+
+Free-form text blocks are handled differently. The parser identifies paragraph boundaries and the chunking logic splits at those boundaries first, falling back to whitespace boundaries only when a paragraph exceeds the target chunk size. This capture shows how a section of prose is broken into readable, self-contained chunks that preserve meaning across boundaries rather than cutting mid-sentence.
 
 ## Tech Stack
 
